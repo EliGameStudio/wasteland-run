@@ -293,7 +293,7 @@ if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch
    часть 3) и вставьте её адрес между кавычками ниже, например:
    const LB_URL='https://wasteland-run-default-rtdb.europe-west1.firebasedatabase.app';
    Если оставить пустым — рейтинг хранится только на этом устройстве. */
-const LB_URL='';
+const LB_URL='https://wasteland-run-default-rtdb.europe-west1.firebasedatabase.app';
 
 let PLAYER_NAME='';
 try{ PLAYER_NAME=localStorage.getItem('wr_name')||''; }catch(e){}
