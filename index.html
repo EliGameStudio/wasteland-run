@@ -27,8 +27,9 @@
   .btn { position:absolute; bottom:calc(18px + env(safe-area-inset-bottom)); width:96px; height:96px; border:4px solid #1a1016;
     border-radius:14px; display:flex; align-items:center; justify-content:center;
     flex-direction:column; gap:8px; color:#f4e3c8; font-size:9px; user-select:none;
+    -webkit-user-select:none; -webkit-touch-callout:none; touch-action:none;
     box-shadow:0 5px 0 #1a1016, inset 0 0 0 3px rgba(255,255,255,.08); z-index:5; }
-  .btn:active { transform:translateY(4px); box-shadow:0 1px 0 #1a1016, inset 0 0 0 3px rgba(255,255,255,.08); }
+  .btn.pressed { transform:translateY(4px); box-shadow:0 1px 0 #1a1016, inset 0 0 0 3px rgba(255,255,255,.08); }
   #btnJump { left:14px;  background:linear-gradient(#5a6338,#3c4526); }
   #btnAtk  { right:14px; background:linear-gradient(#a03427,#6e2118); }
   .btn svg { width:34px; height:34px; }
@@ -129,6 +130,7 @@
       <button class="mbtn small" id="btnRank">🏅 RANKING</button>
       <button class="mbtn small" id="btnName" style="font-size:8px">PLAYER: —</button>
     </div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v2.2</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -164,6 +166,7 @@
     <div class="stat" id="chStat"></div>
     <button class="mbtn" id="btnAd">▶ WATCH AD = +1 ♥<br><span style="font-size:8px;opacity:.7">continue from here</span></button>
     <button class="mbtn red" id="btnRestart">RESTART</button>
+    <button class="mbtn small" id="btnToMenu">◄ MENU</button>
   </div>
 
   <div class="overlay" id="adBox">
@@ -313,18 +316,20 @@ function submitScore(score,dist){
 }
 
 async function renderRank(){
+  const hint=document.getElementById('rankHint');
   const list=document.getElementById('rankList');
-  document.getElementById('rankHint').textContent=
-    LB_URL ? 'Shared across the whole family' : 'Scores on this phone only';
+  list.innerHTML='';
+  hint.textContent=LB_URL ? 'Syncing…' : 'Scores on this phone only';
   let lb=localLB();
   if(LB_URL){
     try{
-      const r=await fetch(LB_URL+'/scores.json');
+      const r=await fetch(LB_URL+'/scores.json',{cache:'no-store'});
       const cloud=await r.json();
       if(cloud) for(const k in cloud)
         if(!lb[k] || cloud[k].score>lb[k].score) lb[k]=cloud[k];
       saveLocalLB(lb);
-    }catch(e){}
+      hint.textContent='Shared across the whole family';
+    }catch(e){ hint.textContent='Offline — showing this phone only'; }
   }
   const rows=Object.entries(lb).sort((a,b)=>b[1].score-a[1].score);
   list.innerHTML='';
@@ -652,7 +657,14 @@ function doAtk(){
   if(P.atkCd<=0 && G.state==='play'){ P.atk=13; P.atkCd=26; SFX.swing(); }
 }
 function bindBtn(id,fn){
-  document.getElementById(id).addEventListener('pointerdown',e=>{e.preventDefault(); initAudio(); fn();});
+  const el=document.getElementById(id);
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault(); el.classList.add('pressed'); initAudio(); fn();
+  });
+  const release=()=>el.classList.remove('pressed');
+  el.addEventListener('pointerup',release);
+  el.addEventListener('pointercancel',release);
+  el.addEventListener('pointerleave',release);
 }
 bindBtn('btnJump',doJump); bindBtn('btnAtk',doAtk);
 window.addEventListener('keydown',e=>{
@@ -723,6 +735,11 @@ document.getElementById('btnClaim').addEventListener('click',()=>{
 });
 document.getElementById('btnRestart').addEventListener('click',startGame);
 document.getElementById('btnStart').addEventListener('click',startGame);
+document.getElementById('btnToMenu').addEventListener('click',()=>{
+  saveMeta(); G.state='menu';
+  if(G.boss){ G.boss=null; }        // stop tense boss music in the menu
+  setOverlay('menu');
+});
 
 /* ================= SHOP & TROPHIES UI ================= */
 function drawPreview(cnv,sk){
@@ -1164,8 +1181,13 @@ resetRun(); updateMenuPlayer();
 setOverlay(PLAYER_NAME ? 'menu' : 'nameBox');
 let last=performance.now();
 function loop(t){
-  const dt=Math.min((t-last)/16.666,2.5); last=t;
-  update(dt); render();
+  try{
+    const dt=Math.min((t-last)/16.666,2.5); last=t;
+    update(dt); render();
+  }catch(err){
+    console.error(err);          // one bad frame must never kill the game
+    last=t;
+  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
