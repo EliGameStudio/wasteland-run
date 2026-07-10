@@ -108,6 +108,10 @@
     font-family:inherit; font-size:14px; text-align:center; color:#ffd75e;
     background:#1a1016; border:4px solid #5a6338; border-radius:10px;
     outline:none; text-transform:uppercase; }
+  .tabs { display:flex; gap:6px; margin-top:10px; }
+  .tab { font-family:inherit; font-size:8px; padding:9px 8px; color:#8d7d6a;
+    background:#1a1016; border:3px solid #2a1f28; border-radius:8px; cursor:pointer; }
+  .tab.on { color:#ffd75e; border-color:#5a6338; background:#241a20; }
   .rrow { display:flex; align-items:center; gap:10px; padding:12px 8px;
     border-bottom:2px solid rgba(255,255,255,.06); font-size:10px; }
   .rrow:last-child { border-bottom:none; }
@@ -149,7 +153,7 @@
       <button class="mbtn small" id="btnRank">🏅 RANKING</button>
       <button class="mbtn small" id="btnName" style="font-size:8px">PLAYER: —</button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v5.2</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v5.3</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -160,8 +164,17 @@
   </div>
 
   <div class="overlay" id="rank">
-    <div class="title" style="font-size:16px">FAMILY RANKING</div>
-    <div class="sub" id="rankHint" style="margin-top:4px"></div>
+    <div class="title" style="font-size:15px">FAMILY RANKING</div>
+    <div class="tabs" id="scopeTabs">
+      <button class="tab on" data-scope="week">THIS WEEK</button>
+      <button class="tab" data-scope="all">ALL TIME</button>
+    </div>
+    <div class="tabs" id="metricTabs">
+      <button class="tab on" data-metric="score">SCORE</button>
+      <button class="tab" data-metric="dist">DISTANCE</button>
+      <button class="tab" data-metric="boss">BOSSES</button>
+    </div>
+    <div class="sub" id="rankHint" style="margin-top:6px"></div>
     <div class="panel" id="rankList"></div>
     <button class="mbtn small" id="btnRankBack">◄ BACK</button>
   </div>
@@ -323,47 +336,122 @@ const maxHearts=()=>3+META.heartUpg;
 const LB_URL='https://wasteland-run-default-rtdb.europe-west1.firebasedatabase.app';
 let PLAYER_NAME='';
 try{ PLAYER_NAME=localStorage.getItem('wr_name')||''; }catch(e){}
-function localLB(){ try{ return JSON.parse(localStorage.getItem('wr_lb')||'{}'); }catch(e){ return {}; } }
-function saveLocalLB(lb){ try{ localStorage.setItem('wr_lb',JSON.stringify(lb)); }catch(e){} }
-function submitScore(score,dist){
-  if(!PLAYER_NAME) return;
-  const lb=localLB(), cur=lb[PLAYER_NAME];
-  if(!cur || score>cur.score){
-    lb[PLAYER_NAME]={score,dist};
-    saveLocalLB(lb);
-    if(LB_URL) fetch(LB_URL+'/scores/'+encodeURIComponent(PLAYER_NAME)+'.json',
-      {method:'PUT',body:JSON.stringify({score,dist})}).catch(()=>{});
-  }
+/* ISO-ish week key, Monday-based: 2026-W28 */
+function weekKey(d){
+  d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  const day=d.getUTCDay()||7;                 // Mon=1 … Sun=7
+  d.setUTCDate(d.getUTCDate()+4-day);         // Thursday of this week
+  const y0=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+  const wk=Math.ceil(((d-y0)/86400000+1)/7);
+  return d.getUTCFullYear()+'-W'+String(wk).padStart(2,'0');
 }
+function daysLeftInWeek(){
+  const now=new Date();
+  const day=now.getDay()||7;                  // Mon=1 … Sun=7
+  return 8-day;                               // days until next Monday
+}
+const WEEK=weekKey(new Date());
+
+function localLB(k){ try{ return JSON.parse(localStorage.getItem(k)||'{}'); }catch(e){ return {}; } }
+function saveLocalLB(k,lb){ try{ localStorage.setItem(k,JSON.stringify(lb)); }catch(e){} }
+const LB_ALL='wr_lb', LB_WK='wr_lb_'+WEEK;
+
+/* merge a run into a table, keeping the best of EACH metric */
+function mergeRun(tbl,name,run){
+  const cur=tbl[name]||{score:0,dist:0,boss:0};
+  const next={ score:Math.max(cur.score|0,run.score|0),
+               dist: Math.max(cur.dist|0, run.dist|0),
+               boss: Math.max(cur.boss|0, run.boss|0) };
+  const changed=next.score!==cur.score||next.dist!==cur.dist||next.boss!==cur.boss;
+  tbl[name]=next;
+  return changed?next:null;
+}
+
+function submitRun(score,dist,boss){
+  if(!PLAYER_NAME) return;
+  const run={score,dist,boss};
+  const all=localLB(LB_ALL), wk=localLB(LB_WK);
+  const a=mergeRun(all,PLAYER_NAME,run), w=mergeRun(wk,PLAYER_NAME,run);
+  saveLocalLB(LB_ALL,all); saveLocalLB(LB_WK,wk);
+  if(!LB_URL) return;
+  const n=encodeURIComponent(PLAYER_NAME);
+  /* both tables live under /scores, so the existing Firebase rule covers them */
+  if(a) fetch(LB_URL+'/scores/'+n+'.json',
+    {method:'PUT',body:JSON.stringify(a)}).catch(()=>{});
+  if(w) fetch(LB_URL+'/scores/_w/'+WEEK+'/'+n+'.json',
+    {method:'PUT',body:JSON.stringify(w)}).catch(()=>{});
+}
+
+/* pull cloud state and fold it into the local cache */
+async function syncLB(){
+  if(!LB_URL) return false;
+  const r=await fetch(LB_URL+'/scores.json',{cache:'no-store'});
+  const cloud=await r.json();
+  const all=localLB(LB_ALL), wk=localLB(LB_WK);
+  if(cloud){
+    for(const k in cloud){
+      if(k==='_w') continue;                   // weekly sub-tree
+      const v=cloud[k];
+      mergeRun(all,k,typeof v==='number'?{score:v,dist:0,boss:0}:v);
+    }
+    const w=cloud._w && cloud._w[WEEK];
+    if(w) for(const k in w) mergeRun(wk,k,w[k]);
+  }
+  saveLocalLB(LB_ALL,all); saveLocalLB(LB_WK,wk);
+  return true;
+}
+/* quiet background refresh at launch */
+if(LB_URL) syncLB().catch(()=>{});
+
+let rankScope='week', rankMetric='score';
 async function renderRank(){
   const hint=document.getElementById('rankHint');
   const list=document.getElementById('rankList');
   list.innerHTML='';
-  hint.textContent=LB_URL ? 'Syncing…' : 'Scores on this phone only';
-  let lb=localLB();
+  hint.textContent=LB_URL?'Syncing…':'This phone only';
   if(LB_URL){
-    try{
-      const r=await fetch(LB_URL+'/scores.json',{cache:'no-store'});
-      const cloud=await r.json();
-      if(cloud) for(const k in cloud)
-        if(!lb[k] || cloud[k].score>lb[k].score) lb[k]=cloud[k];
-      saveLocalLB(lb);
-      hint.textContent='Shared across the whole family';
+    try{ await syncLB();
+      hint.innerHTML=(rankScope==='week'
+        ? 'Resets Monday · '+daysLeftInWeek()+' day(s) left'
+        : 'All-time family records')+'<br>Shared across the family';
     }catch(e){ hint.textContent='Offline — showing this phone only'; }
   }
-  const rows=Object.entries(lb).sort((a,b)=>b[1].score-a[1].score);
+  const tbl=localLB(rankScope==='week'?LB_WK:LB_ALL);
+  const unit={score:'',dist:' m',boss:' 💀'}[rankMetric];
+  const sub ={score:'m',dist:'pts',boss:'pts'};
+  const rows=Object.entries(tbl)
+    .filter(([n,d])=>(d[rankMetric]|0)>0)
+    .sort((a,b)=>b[1][rankMetric]-a[1][rankMetric]);
   if(!rows.length){
-    list.innerHTML='<div class="rrow"><div class="nm" style="text-align:center;color:#b7a58f">No runs yet — be the first!</div></div>';
+    list.innerHTML='<div class="rrow"><div class="nm" style="text-align:center;color:#b7a58f">'+
+      (rankScope==='week'?'No runs this week — be the first!':'No runs yet — be the first!')+
+      '</div></div>';
     return;
   }
   const medals=['🥇','🥈','🥉'];
   rows.forEach(([name,d],i)=>{
     const row=document.createElement('div');
     row.className='rrow'+(name===PLAYER_NAME?' me':'');
+    const extra = rankMetric==='score' ? (d.dist|0)+' m'
+                : rankMetric==='dist'  ? (d.score|0)+' pts'
+                : (d.score|0)+' pts';
     row.innerHTML='<div class="pos">'+(medals[i]||(i+1))+'</div>'+
       '<div class="nm">'+name.replace(/</g,'&lt;')+'</div>'+
-      '<div class="sc">'+d.score+'<br><span style="color:#b7a58f;font-size:8px">'+(d.dist||0)+' m</span></div>';
+      '<div class="sc">'+(d[rankMetric]|0)+unit+
+      '<br><span style="color:#b7a58f;font-size:8px">'+extra+'</span></div>';
     list.appendChild(row);
+  });
+}
+function bindTabs(){
+  document.querySelectorAll('#scopeTabs .tab').forEach(b=>b.onclick=()=>{
+    rankScope=b.dataset.scope;
+    document.querySelectorAll('#scopeTabs .tab').forEach(x=>x.classList.toggle('on',x===b));
+    initAudio(); SFX.coin(); renderRank();
+  });
+  document.querySelectorAll('#metricTabs .tab').forEach(b=>b.onclick=()=>{
+    rankMetric=b.dataset.metric;
+    document.querySelectorAll('#metricTabs .tab').forEach(x=>x.classList.toggle('on',x===b));
+    initAudio(); SFX.coin(); renderRank();
   });
 }
 
@@ -1197,7 +1285,7 @@ const G={
   state:'menu', scroll:0, speed:4.5, dist:0, score:0, best:0, kills:0,
   hearts:3, invuln:0, shake:0, zone:0, zoneCount:0, banner:null,
   runCoins:0, safeDist:0, boss:null, nextBoss:1400, bossNum:0,
-  combo:0, comboT:0, bestCombo:0,
+  combo:0, comboT:0, bestCombo:0, bossesRun:0,
   crates:[], picks:[], magnet:0, shield:0, dash:0,
   platforms:[], enemies:[], globs:[], coins:[], parts:[], pops:[], frame:0
 };
@@ -1489,7 +1577,7 @@ function updateBoss(dt){
       G.nextBoss=Math.floor(G.dist/15)+ZONE_M;    // next zone's boss
       META.coins+=100; META.earned+=100; G.runCoins+=100;
       if(META.earned>=100) unlock('hoard');
-      META.bossKills++; unlock('boss'); saveMeta();
+      META.bossKills++; G.bossesRun++; unlock('boss'); saveMeta();
       G.enemies.length=0; G.globs.length=0;        // clear minions & shots
       G.banner={txt:'BOSS DEFEATED! +100 ⛁', l:160};
       SFX.heart();
@@ -1568,7 +1656,7 @@ window.addEventListener('keydown',e=>{
 function resetRun(){
   Object.assign(G,{scroll:0,speed:4.5,dist:0,score:0,kills:0,hearts:maxHearts(),invuln:0,
     zone:0,zoneCount:0,banner:null,runCoins:0,safeDist:0,boss:null,nextBoss:1400,bossNum:0,
-    combo:0,comboT:0,bestCombo:0,comboPts:0,
+    combo:0,comboT:0,bestCombo:0,comboPts:0,bossesRun:0,
     crates:[],picks:[],magnet:0,shield:0,dash:0,
     platforms:[],enemies:[],globs:[],coins:[],parts:[],pops:[],crates:[],picks:[]});
   updateZone(); genPlatforms();
@@ -1601,9 +1689,10 @@ function loseHeart(){
   G.combo=0; G.comboT=0; SFX.hurt();
   if(G.hearts<=0){
     G.state='choice'; G.best=Math.max(G.best,G.score); saveMeta();
-    submitScore(G.score, Math.floor(G.dist/15));
+    submitRun(G.score, Math.floor(G.dist/15), G.bossesRun);
     document.getElementById('chStat').innerHTML=
       'SCORE: '+G.score+'<br>DISTANCE: '+Math.floor(G.dist/15)+' m'+
+      '<br>BOSSES: '+G.bossesRun+' 💀'+
       '<br>BEST COMBO: x'+G.bestCombo+
       '<br>COINS: +'+G.runCoins+' ⛁<br>BEST: '+G.best;
     setOverlay('choice');
@@ -1688,6 +1777,7 @@ document.getElementById('btnNameOk').addEventListener('click',confirmName);
 document.getElementById('nameInput').addEventListener('keydown',
   e=>{ if(e.key==='Enter') confirmName(); });
 document.getElementById('btnName').addEventListener('click',askName);
+bindTabs();
 document.getElementById('btnRank').addEventListener('click',
   ()=>{ setOverlay('rank'); renderRank(); });
 document.getElementById('btnRankBack').addEventListener('click',()=>setOverlay('menu'));
