@@ -166,7 +166,7 @@
       <button class="mbtn small" id="btnQuests">📋 DAILY</button>
       <button class="mbtn small" id="btnTrain">🧠 MATH</button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v6.1</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v6.4</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -283,59 +283,200 @@ function fit(){
 }
 window.addEventListener('resize',fit); fit();
 
-/* ================= AUDIO ================= */
-let AC=null, muted=false;
-function initAudio(){ if(!AC){ try{
-  AC=new (window.AudioContext||window.webkitAudioContext)();
-}catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); }
-function note(f,t,d,type='square',v=.1,slide=0){
-  if(!AC||muted) return;
-  const o=AC.createOscillator(), g=AC.createGain();
-  o.type=type; o.frequency.setValueAtTime(f,t);
-  if(slide) o.frequency.linearRampToValueAtTime(Math.max(30,f+slide),t+d);
-  g.gain.setValueAtTime(v,t);
-  g.gain.exponentialRampToValueAtTime(.001,t+d);
-  o.connect(g); g.connect(AC.destination); o.start(t); o.stop(t+d+.02);
+/* ================= AUDIO =================
+   Chain:  voices -> masterGain -> lowpass -> destination
+   Every note is two detuned oscillators, so it sings instead of beeping. */
+let AC=null, muted=false, MASTER=null, LP=null, NOISE=null;
+function initAudio(){
+  if(!AC){
+    try{
+      AC=new (window.AudioContext||window.webkitAudioContext)();
+      MASTER=AC.createGain(); MASTER.gain.value=.9;
+      LP=AC.createBiquadFilter(); LP.type='lowpass';
+      LP.frequency.value=9000; LP.Q.value=.6;
+      MASTER.connect(LP); LP.connect(AC.destination);
+      /* one second of noise, reused for every drum hit */
+      NOISE=AC.createBuffer(1, AC.sampleRate, AC.sampleRate);
+      const d=NOISE.getChannelData(0);
+      for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+    }catch(e){}
+  }
+  if(AC && AC.state==='suspended') AC.resume();
+}
+const mtof=m=>440*Math.pow(2,(m-69)/12);
+
+/* one voice: two oscillators, slightly apart in pitch */
+function note(f,t,d,type='square',v=.1,slide=0,detune=7){
+  if(!AC||muted||!f) return;
+  const g=AC.createGain();
+  g.gain.setValueAtTime(0,t);
+  g.gain.linearRampToValueAtTime(v,t+.008);
+  g.gain.exponentialRampToValueAtTime(.0008,t+d);
+  g.connect(MASTER);
+  for(const cents of [-detune,detune]){
+    const o=AC.createOscillator();
+    o.type=type; o.frequency.setValueAtTime(f,t);
+    o.detune.setValueAtTime(cents,t);
+    if(slide) o.frequency.linearRampToValueAtTime(Math.max(30,f+slide),t+d);
+    o.connect(g); o.start(t); o.stop(t+d+.03);
+  }
 }
 function beep(f,d,type='square',v=.12,slide=0){ if(AC) note(f,AC.currentTime,d,type,v,slide); }
+
+/* ---- drums from filtered noise ---- */
+function drum(t,kind){
+  if(!AC||muted) return;
+  if(kind==='kick'){
+    const o=AC.createOscillator(), g=AC.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(140,t);
+    o.frequency.exponentialRampToValueAtTime(42,t+.13);
+    g.gain.setValueAtTime(.34,t); g.gain.exponentialRampToValueAtTime(.001,t+.16);
+    o.connect(g); g.connect(MASTER); o.start(t); o.stop(t+.18);
+    return;
+  }
+  const src=AC.createBufferSource(); src.buffer=NOISE;
+  const f=AC.createBiquadFilter(), g=AC.createGain();
+  let dur;
+  if(kind==='snare'){
+    f.type='bandpass'; f.frequency.value=1900; f.Q.value=1.1;
+    g.gain.setValueAtTime(.20,t); g.gain.exponentialRampToValueAtTime(.001,t+.13);
+    dur=.15;
+    /* body under the snap */
+    const o=AC.createOscillator(), og=AC.createGain();
+    o.type='triangle'; o.frequency.setValueAtTime(190,t);
+    og.gain.setValueAtTime(.10,t); og.gain.exponentialRampToValueAtTime(.001,t+.09);
+    o.connect(og); og.connect(MASTER); o.start(t); o.stop(t+.1);
+  } else {                                   // hat
+    f.type='highpass'; f.frequency.value=7500;
+    const open=kind==='hatOpen';
+    g.gain.setValueAtTime(open?.10:.07,t);
+    g.gain.exponentialRampToValueAtTime(.001,t+(open?.13:.035));
+    dur=open?.15:.05;
+  }
+  src.connect(f); f.connect(g); g.connect(MASTER);
+  src.start(t); src.stop(t+dur);        // start MUST come before stop
+}
+
+/* ================= MUSIC =================
+   16-step patterns, MIDI numbers, 0 = rest. */
+const _=0;
+const THEMES=[
+ /* RUINED CITY — A minor, marching */
+ {bpm:142, lead:'square', bass:'triangle',
+  L:[69,_,72,74, 76,_,74,72, 69,_,67,69, 71,_,69,_],
+  B:[45,_,45,_, 48,_,48,_, 43,_,43,_, 40,_,40,_],
+  A:[_,81,_,84, _,81,_,88, _,79,_,83, _,76,_,81]},
+ /* TOXIC SWAMP — sickly, chromatic slide */
+ {bpm:120, lead:'sawtooth', bass:'triangle',
+  L:[62,_,63,_, 65,_,63,62, 60,_,62,_, 58,_,_,_],
+  B:[38,_,_,38, 39,_,_,39, 36,_,_,36, 34,_,34,_],
+  A:[_,74,_,75, _,77,_,75, _,72,_,74, _,70,_,_]},
+ /* FROZEN SECTOR — bright, glassy, high */
+ {bpm:132, lead:'square', bass:'sine',
+  L:[79,81,83,_, 86,_,83,81, 79,_,76,79, 81,_,79,_],
+  B:[52,_,52,_, 47,_,47,_, 45,_,45,_, 50,_,50,_],
+  A:[91,_,88,_, 91,_,95,_, 88,_,84,_, 88,_,91,_]},
+ /* SCORCHED SANDS — phrygian dominant, eastern */
+ {bpm:126, lead:'sawtooth', bass:'triangle',
+  L:[64,65,68,65, 64,_,62,60, 64,65,68,71, 69,68,65,64],
+  B:[40,_,40,41, 40,_,36,_, 40,_,40,41, 40,_,45,_],
+  A:[_,76,_,80, _,77,_,76, _,80,_,83, _,80,_,76]},
+ /* DROWNED CITY — dorian, floating */
+ {bpm:112, lead:'sine', bass:'sine',
+  L:[74,_,76,_, 79,_,76,74, 72,_,74,_, 71,_,_,_],
+  B:[43,_,43,_, 38,_,38,_, 41,_,41,_, 36,_,36,_],
+  A:[86,_,_,83, 86,_,_,90, 83,_,_,79, 83,_,_,86]},
+ /* INFERNO — tritone, relentless */
+ {bpm:150, lead:'sawtooth', bass:'sawtooth',
+  L:[64,_,70,_, 64,_,63,64, 59,_,64,_, 66,_,64,_],
+  B:[40,40,_,40, 34,34,_,34, 40,40,_,40, 35,_,35,_],
+  A:[_,76,_,82, _,76,_,79, _,71,_,76, _,78,_,76]}
+];
+const BOSS_THEME={bpm:158, lead:'sawtooth', bass:'sawtooth',
+  L:[57,_,60,_, 63,_,60,_, 57,_,56,_, 55,_,56,_],
+  B:[33,33,_,33, 33,33,_,33, 31,31,_,31, 32,_,32,_],
+  A:[69,_,72,_, 75,_,72,_, 69,_,68,_, 67,_,68,_]};
+const NIGHT_THEME={bpm:96, lead:'triangle', bass:'sine',
+  L:[57,_,_,60, 63,_,_,62, 60,_,_,58, 57,_,_,_],
+  B:[33,_,_,_, 28,_,_,_, 31,_,_,_, 26,_,_,26],
+  A:[_,_,81,_, _,_,84,_, _,_,80,_, _,_,77,_]};
+
+/* drum patterns: 1 = hit */
+const KICK =[1,0,0,0, 0,0,1,0, 0,0,1,0, 0,0,0,0];
+const SNARE=[0,0,0,0, 1,0,0,0, 0,0,0,0, 1,0,0,1];
+const HAT  =[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1];
+const KICK_BOSS=[1,0,1,0, 1,0,1,0, 1,0,1,0, 1,0,1,1];
+
+let mStep=0, mNext=0;
+function currentTheme(){
+  if(G.boss && G.boss.state!=='die') return BOSS_THEME;
+  if(G.night) return NIGHT_THEME;
+  return THEMES[zCur] || THEMES[0];
+}
+setInterval(()=>{
+  if(!AC||muted) return;
+  if(mNext<AC.currentTime) mNext=AC.currentTime+.06;
+  const T=currentTheme();
+  const playing = G.state==='play';
+  const boss = !!(G.boss && G.boss.state!=='die');
+  /* the filter closes at night, opens on a boss */
+  const target = G.night?3200 : boss?11000 : 9000;
+  if(LP) LP.frequency.setTargetAtTime(target, AC.currentTime, .4);
+
+  while(mNext < AC.currentTime+.16){
+    const s=mStep%16;
+    const spb=60/T.bpm/2;                       // one 8th note
+
+    /* --- bass: always --- */
+    if(T.B[s]) note(mtof(T.B[s]), mNext, spb*1.7, T.bass, .085, 0, 4);
+    /* second bass an octave down while a boss is up */
+    if(boss && T.B[s]) note(mtof(T.B[s]-12), mNext, spb*1.7, 'triangle', .07, 0, 3);
+
+    /* --- lead --- */
+    if(T.L[s]) note(mtof(T.L[s]), mNext, spb*1.25, T.lead, playing?.055:.04, 0, 9);
+
+    /* --- arpeggio: only when the run heats up --- */
+    if(playing && (boss || G.combo>=3) && T.A[s])
+      note(mtof(T.A[s]), mNext, spb*.6, 'square', .028, 0, 12);
+
+    /* --- drums layer in with speed --- */
+    if(playing){
+      const fast=G.speed>5.3, faster=G.speed>6.4;
+      if((boss?KICK_BOSS:KICK)[s]) drum(mNext,'kick');
+      if(fast && SNARE[s]) drum(mNext,'snare');
+      if(HAT[s]) drum(mNext, (faster && s%4===2)?'hatOpen':'hat');
+    }
+    mNext+=spb; mStep++;
+  }
+},30);
+
+/* short fanfares */
+function jingle(notes, type='square'){
+  if(!AC||muted) return;
+  let t=AC.currentTime;
+  for(const [m,d] of notes){ if(m) note(mtof(m),t,d*1.4,type,.12,0,10); t+=d; }
+}
 const SFX={
   jump:()=>beep(420,.13,'square',.09,260),
   swing:()=>beep(300,.09,'sawtooth',.1,-150),
   kill:()=>{beep(220,.1,'square',.14,-120); if(AC)note(120,AC.currentTime+.06,.14,'sawtooth',.12,-60);},
   hurt:()=>beep(140,.28,'sawtooth',.18,-70),
   heart:()=>{beep(660,.1,'square',.1); if(AC)note(880,AC.currentTime+.1,.16,'square',.1);},
-  zone:()=>{if(!AC)return; const t=AC.currentTime;
-    note(523,t,.1,'square',.09); note(659,t+.1,.1,'square',.09); note(784,t+.2,.2,'square',.09);},
+  zone:()=>jingle([[72,.09],[76,.09],[79,.09],[84,.22]]),
   coin:()=>{beep(988,.06,'square',.06); if(AC)note(1319,AC.currentTime+.06,.1,'square',.06);},
-  ach:()=>{if(!AC)return; const t=AC.currentTime;
-    note(784,t,.09,'square',.09); note(988,t+.09,.09,'square',.09);
-    note(1175,t+.18,.09,'square',.09); note(1568,t+.27,.22,'square',.1);},
+  ach:()=>jingle([[76,.09],[79,.09],[83,.09],[88,.26]]),
+  victory:()=>jingle([[72,.12],[72,.09],[74,.12],[79,.34]],'sawtooth'),
+  nightfall:()=>jingle([[69,.18],[68,.18],[64,.18],[57,.5]],'triangle'),
   growl:()=>beep(72,.32,'sawtooth',.05,-20),
   screech:()=>beep(950,.12,'square',.04,420),
   spit:()=>beep(520,.08,'square',.06,-260),
-  thud:()=>beep(95,.12,'triangle',.16,-30),
+  thud:()=>{beep(95,.12,'triangle',.16,-30); if(AC) drum(AC.currentTime,'kick');},
   snarl:()=>beep(160,.14,'sawtooth',.05,60),
   roar:()=>{if(!AC)return; const t=AC.currentTime;
-    note(60,t,.5,'sawtooth',.16,-15); note(90,t+.05,.4,'sawtooth',.1,-25);},
-  bossHit:()=>beep(180,.14,'square',.16,-100)
+    note(60,t,.5,'sawtooth',.16,-15); note(90,t+.05,.4,'sawtooth',.1,-25);
+    drum(t,'kick'); drum(t+.12,'kick');},
+  bossHit:()=>{beep(180,.14,'square',.16,-100); if(AC) drum(AC.currentTime,'snare');}
 };
-const LEAD=[440,523.25,659.25,523.25, 440,523.25,659.25,783.99,
-            349.23,440,523.25,440,    391.99,493.88,587.33,493.88];
-const BASS=[110,0,110,0, 110,0,110,0, 87.31,0,87.31,0, 97.99,0,97.99,0];
-const ARP =[0,659.25,0,880, 0,659.25,0,880, 0,523.25,0,698.46, 0,587.33,0,783.99];
-let mStep=0, mNext=0;
-setInterval(()=>{
-  if(!AC||muted) return;
-  if(mNext<AC.currentTime) mNext=AC.currentTime+.05;
-  const boss=G.boss&&G.boss.state!=='die';
-  while(mNext<AC.currentTime+.15){
-    const s=mStep%16, k=boss?.944:1;
-    if(BASS[s]) note(BASS[s]*k,mNext,.24,'triangle',boss?.09:.075);
-    if(LEAD[s]) note(LEAD[s]*k,mNext,.13,'square',.035);
-    if(ARP[s])  note(ARP[s]*2*k,mNext,.07,'square',.014);
-    mNext+=60/(boss?150:140)/2; mStep++;
-  }
-},30);
 document.getElementById('btnSnd').addEventListener('click',e=>{
   initAudio(); muted=!muted;
   e.target.textContent=muted?'♪ SOUND: OFF':'♪ SOUND: ON';
@@ -1337,6 +1478,55 @@ const PICK={
   })
 };
 
+/* ---- soft radial glow, pre-rendered, tinted at draw time ---- */
+function makeGlow(size){
+  const c=document.createElement('canvas'); c.width=size; c.height=size;
+  const g=c.getContext('2d');
+  const r=size/2, grd=g.createRadialGradient(r,r,0,r,r,r);
+  grd.addColorStop(0,'rgba(255,255,255,1)');
+  grd.addColorStop(.4,'rgba(255,255,255,.5)');
+  grd.addColorStop(1,'rgba(255,255,255,0)');
+  g.fillStyle=grd; g.fillRect(0,0,size,size);
+  return c;
+}
+const GLOW=makeGlow(64);
+/* blit the glow additively in a colour */
+function glowAt(x,y,size,color,alpha){
+  ctx.globalCompositeOperation='lighter';
+  ctx.globalAlpha=alpha;
+  const prev=ctx.fillStyle;
+  // tint via a temp: draw white glow then multiply is costly; instead use shadow-free tint
+  ctx.drawImage(TINTED_GLOW(color), x-size/2, y-size/2, size, size);
+  ctx.globalAlpha=1;
+  ctx.globalCompositeOperation='source-over';
+}
+/* cache a coloured silhouette of a sprite (for rim lighting) */
+const _silCache=new Map();
+function TINTED_SIL(img,color){
+  let byColor=_silCache.get(img);
+  if(!byColor){ byColor={}; _silCache.set(img,byColor); }
+  if(byColor[color]) return byColor[color];
+  const c=document.createElement('canvas'); c.width=img.width; c.height=img.height;
+  const g=c.getContext('2d');
+  g.drawImage(img,0,0);
+  g.globalCompositeOperation='source-in';
+  g.fillStyle=color; g.fillRect(0,0,c.width,c.height);
+  byColor[color]=c;
+  return c;
+}
+/* cache one tinted glow canvas per colour */
+const _glowCache={};
+function TINTED_GLOW(color){
+  if(_glowCache[color]) return _glowCache[color];
+  const c=document.createElement('canvas'); c.width=64; c.height=64;
+  const g=c.getContext('2d');
+  g.drawImage(GLOW,0,0);
+  g.globalCompositeOperation='source-in';
+  g.fillStyle=color; g.fillRect(0,0,64,64);
+  _glowCache[color]=c;
+  return c;
+}
+
 /* ---- coins, hearts, globs, particles ---- */
 const COIN=[7,5,3,1].map(w=>makeSpr(24,24,p=>{
   p(12-w,3,w*2,18,'#e8a23c'); p(12-w,3,w*2,4,'#ffd75e');
@@ -1376,6 +1566,7 @@ const ZONES=[
   far:'#241722', mid:'#170f18', win:'rgba(232,140,60,.55)',
   plat:'#3f3a36', brick:'#36312d', top:'#6a625a', hi:'#7d746a', dark:'#221d24',
   fog:'30,18,32', part:{c:'rgba(220,200,180,.35)',vy:.8,vx:.6},
+  rim:'rgba(232,162,60,.30)', glow:'#e8a23c',
   roster:['ghoul','ghoul','flyer','brute']},
  {name:'TOXIC SWAMP', boss:'matriarch',
   wx:{name:'ACID RAIN', tint:'rgba(125,255,79,.10)', kind:'rain', rainC:'#8fff6a',
@@ -1384,6 +1575,7 @@ const ZONES=[
   far:'#0d2016', mid:'#07140c', win:'rgba(125,255,79,.4)',
   plat:'#35403a', brick:'#2c3630', top:'#5c7a5e', hi:'#6e9070', dark:'#182018',
   fog:'14,40,24', part:{c:'rgba(125,255,79,.4)',vy:-.42,vx:.22},
+  rim:'rgba(125,255,79,.30)', glow:'#7dff4f',
   roster:['ghoul','spitter','crawler','spitter']},
  {name:'FROZEN SECTOR', boss:'titan',
   wx:{name:'BLIZZARD', tint:'rgba(220,235,255,.20)', kind:'snow', grav:1.14},
@@ -1391,6 +1583,7 @@ const ZONES=[
   far:'#1c2638', mid:'#101a2a', win:'rgba(150,200,255,.4)',
   plat:'#3a4048', brick:'#31363e', top:'#96a8ba', hi:'#c8d8e8', dark:'#20242c',
   fog:'40,55,80', part:{c:'rgba(240,248,255,.7)',vy:1.05,vx:.38},
+  rim:'rgba(180,220,255,.35)', glow:'#aee8ff',
   roster:['crawler','ghoul','flyer','crawler']},
  {name:'SCORCHED SANDS', boss:'wyrm',
   wx:{name:'SANDSTORM', tint:'rgba(220,170,90,.18)', kind:'sand', speed:1.14},
@@ -1398,6 +1591,7 @@ const ZONES=[
   far:'#3a2412', mid:'#241408', win:'rgba(255,200,90,.4)',
   plat:'#5a4a36', brick:'#4c3e2c', top:'#8a7050', hi:'#a08560', dark:'#302416',
   fog:'70,45,20', part:{c:'rgba(230,180,110,.45)',vy:.3,vx:2.2},
+  rim:'rgba(255,200,90,.30)', glow:'#ffd75e',
   roster:['spitter','flyer','brute','ghoul']},
  {name:'DROWNED CITY', boss:'leviathan', water:true,
   wx:{name:'DOWNPOUR', tint:'rgba(120,200,235,.12)', kind:'rain', rainC:'#a8dff0', speed:1.06},
@@ -1405,6 +1599,7 @@ const ZONES=[
   far:'#132835', mid:'#0a1720', win:'rgba(120,210,235,.45)',
   plat:'#3a4a52', brick:'#31404a', top:'#6a8a96', hi:'#93b8c4', dark:'#1a2830',
   fog:'16,50,72', part:{c:'rgba(170,225,245,.45)',vy:-.6,vx:.2},
+  rim:'rgba(120,210,235,.32)', glow:'#78d2eb',
   roster:['flyer','spitter','ghoul','flyer']},
  {name:'INFERNO', boss:'colossus', fire:true,
   wx:{name:'EMBER FALL', tint:'rgba(255,120,40,.12)', kind:'ember',
@@ -1413,6 +1608,7 @@ const ZONES=[
   far:'#3a1410', mid:'#200808', win:'rgba(255,140,50,.55)',
   plat:'#3a2420', brick:'#2e1c18', top:'#6a3a28', hi:'#8a4c34', dark:'#170e0c',
   fog:'70,20,10', part:{c:'rgba(255,170,70,.6)',vy:-.95,vx:.5},
+  rim:'rgba(255,120,40,.40)', glow:'#ff8a1e',
   roster:['brute','crawler','flyer','crawler']}
 ];
 function makeSkyline(w,h,base,winC,seed){
@@ -1447,7 +1643,8 @@ function updateZone(){
   const a=ZONES[zPrev], b=ZONES[zCur], t=zBlend;
   CZ={ sky:b.sky.map((c,i)=>hexLerp(a.sky[i],c,t)),
        sun:hexLerp(a.sun,b.sun,t), sunY:a.sunY+(b.sunY-a.sunY)*t,
-       fog:t<.5?a.fog:b.fog, part:t<.5?a.part:b.part };
+       fog:t<.5?a.fog:b.fog, part:t<.5?a.part:b.part,
+       rim:t<.5?a.rim:b.rim, glow:t<.5?a.glow:b.glow };
   if(zi!==G.zone && G.state==='play'){
     G.zone=zi; G.zoneCount++;
     if(G.zoneCount>=5) unlock('tour');
@@ -1848,14 +2045,14 @@ function updateBoss(dt){
         unlock('night');
         G.banner={txt:'☾ NIGHTFALL ☾', l:220};
         META.coins+=500; META.earned+=500; G.runCoins+=500;
-        SFX.ach();
+        SFX.nightfall();
       }
       META.coins+=100; META.earned+=100; G.runCoins+=100;
       if(META.earned>=100) unlock('hoard');
       META.bossKills++; G.bossesRun++; questProgress('bosses',1); unlock('boss'); saveMeta();
       G.enemies.length=0; G.globs.length=0;        // clear minions & shots
       G.banner={txt:'BOSS DEFEATED! +100 ⛁', l:160};
-      SFX.heart();
+      SFX.victory();
     }
     return;
   }
@@ -2463,9 +2660,16 @@ function update(dt){
   P.y+=P.vy*dt;
   P.ground=false;
   const wx=G.scroll+P.sx;
+  const wasAir=!P.ground;
   if(P.vy>=0) for(const pl of G.platforms){
     if(wx+P.w/2>pl.x && wx-P.w/2<pl.x+pl.w && prevB<=pl.y+9 && P.y+P.h>=pl.y){
-      P.y=pl.y-P.h; P.vy=0; P.ground=true; break;
+      const impact=P.vy;
+      P.y=pl.y-P.h; P.vy=0; P.ground=true;
+      if(wasAir && impact>9){                   // kick up dust on a real landing
+        for(let i=0;i<7;i++) G.parts.push({x:P.sx+rnd(-14,14),y:P.y+P.h,
+          vx:rnd(-2.5,2.5),vy:rnd(-2.2,-.3),l:rnd(10,20),c:'rgba(210,198,178,.55)'});
+      }
+      break;
     }
   }
   if(P.ground) P.runT+=G.speed*dt;
@@ -2786,8 +2990,9 @@ function render(){
 
   for(const c of G.coins){
     const f=Math.abs(Math.floor(c.ph*1.4)%4);
-    ctx.drawImage(COIN[f], Math.round(c.x-G.scroll-12),
-                  Math.round(c.y+Math.sin(c.ph)*3-12));
+    const cx=c.x-G.scroll, cy=c.y+Math.sin(c.ph)*3;
+    glowAt(cx, cy, 30, '#ffd75e', .35+Math.sin(c.ph*2)*.12);
+    ctx.drawImage(COIN[f], Math.round(cx-12), Math.round(cy-12));
   }
   for(const c of G.crates){
     if(c.flash>0 && Math.floor(G.frame/2)%2===0) continue;
@@ -2795,9 +3000,8 @@ function render(){
   }
   for(const k of G.picks){
     const bob=Math.sin(k.ph)*4;
-    const gl=6+Math.sin(k.ph*1.6)*3;
-    ctx.fillStyle='rgba(255,215,94,.16)';
-    ctx.fillRect(k.x-G.scroll-gl/2, k.y+bob-gl/2, 30+gl, 30+gl);
+    const kc={heal:'#ff8d7a',magnet:'#ff5a4a',shield:'#a8e4ff'}[k.kind]||'#ffd75e';
+    glowAt(k.x-G.scroll+15, k.y+bob+15, 46, kc, .35+Math.sin(k.ph*1.6)*.12);
     ctx.drawImage(PICK[k.kind], Math.round(k.x-G.scroll), Math.round(k.y+bob));
   }
 
@@ -2815,15 +3019,15 @@ function render(){
     } else ctx.drawImage(spr[f],x,y);
   }
   for(const b of G.bolts){
-    const bx=Math.round(b.x-G.scroll-15);
-    ctx.globalAlpha=.35;
-    ctx.drawImage(BOLT, bx-16, Math.round(b.y-6));
-    ctx.globalAlpha=1;
-    ctx.drawImage(BOLT, bx, Math.round(b.y-6));
+    const bx=b.x-G.scroll;
+    glowAt(bx, b.y, 34, '#ffd75e', .6);
+    ctx.drawImage(BOLT, Math.round(bx-15), Math.round(b.y-6));
   }
   for(const g of G.globs){
     const spr=GLOBS[g.col]||GLOBS.acid;
     const wob=g.col==='ice'?0:Math.sin(g.ph)*4;
+    const gc={acid:'#7dff4f',fire:'#ff8a1e',ice:'#c8ecf8',water:'#4aa0b0'}[g.col]||'#7dff4f';
+    glowAt(g.x-G.scroll, g.y+wob, 26, gc, .45);
     ctx.drawImage(spr, Math.round(g.x-G.scroll-spr.width/2),
                   Math.round(g.y+wob-spr.height/2));
   }
@@ -2843,6 +3047,10 @@ function render(){
       const f=(b.frame!==undefined && (b.type==='titan'||b.type==='colossus'||b.type==='wyrm'))
               ? b.frame : Math.floor(G.frame/5)%2;
       const spr=frames[f];
+      const bc = b.type==='colossus'||b.type==='warlord' ? '#ff8a1e'
+               : b.type==='titan' ? '#7df0ff'
+               : b.type==='matriarch' ? '#7dff4f' : '#ffd75e';
+      glowAt(b.x, b.y-D.half[1]*.35, D.half[0]*1.3, bc, b.vuln?.30:.16);
       ctx.save();
       ctx.translate(Math.round(b.x), Math.round(b.y));
       if(b.state==='die') ctx.rotate(b.spin);
@@ -2854,15 +3062,18 @@ function render(){
   /* player */
   if(G.state!=='menu' && !(G.invuln>0 && Math.floor(G.frame/4)%2===0)){
     const sp=PSPR[META.skin][META.hero];
-    if(P.slide>0){
-      ctx.drawImage(sp.slide, Math.round(P.sx-P.w/2-SOX), Math.round(P.y-SOY));
-    } else {
-      let img;
-      if(P.atk>0) img=sp.atk;
-      else if(!P.ground) img=sp.jump;
-      else img=sp.run[Math.floor(P.runT/13)%4];
-      ctx.drawImage(img, Math.round(P.sx-P.w/2-POX), Math.round(P.y-POY));
+    let img, ox, oy;
+    if(P.slide>0){ img=sp.slide; ox=SOX; oy=SOY; }
+    else { img=P.atk>0?sp.atk:(!P.ground?sp.jump:sp.run[Math.floor(P.runT/13)%4]); ox=POX; oy=POY; }
+    /* coloured rim light: draw the silhouette offset toward the light source */
+    if(CZ.rim){
+      ctx.save();
+      ctx.globalCompositeOperation='lighter';
+      ctx.globalAlpha=.5;
+      ctx.drawImage(TINTED_SIL(img,CZ.rim), Math.round(P.sx-P.w/2-ox+3), Math.round(P.y-oy));
+      ctx.restore();
     }
+    ctx.drawImage(img, Math.round(P.sx-P.w/2-ox), Math.round(P.y-oy));
   }
   if(G.shield>0 && G.state!=='menu'){        // shimmering bubble
     const r=40+Math.sin(G.frame*.18)*3;
