@@ -153,7 +153,7 @@
       <button class="mbtn small" id="btnRank">🏅 RANKING</button>
       <button class="mbtn small" id="btnName" style="font-size:8px">PLAYER: —</button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v5.3</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v5.4</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -1175,36 +1175,44 @@ const GLOBS={
 const ZONE_M=1500;
 const ZONES=[
  {name:'RUINED CITY', boss:'ravager',
+  wx:{name:'DEBRIS WIND', tint:'rgba(190,150,110,.10)', kind:'ash'},
   sky:['#231331','#5c2036','#a8492b','#c4552b'], sun:'#e8a23c', sunY:.32,
   far:'#241722', mid:'#170f18', win:'rgba(232,140,60,.55)',
   plat:'#3f3a36', brick:'#36312d', top:'#6a625a', hi:'#7d746a', dark:'#221d24',
   fog:'30,18,32', part:{c:'rgba(220,200,180,.35)',vy:.8,vx:.6},
   roster:['ghoul','ghoul','flyer','brute']},
  {name:'TOXIC SWAMP', boss:'matriarch',
+  wx:{name:'ACID RAIN', tint:'rgba(125,255,79,.10)', kind:'rain', rainC:'#8fff6a',
+      hazard:'acid', rate:.020, speed:.90},
   sky:['#07130f','#0e2c1e','#1e4a2a','#2f6b33'], sun:'#bfe8a0', sunY:.25,
   far:'#0d2016', mid:'#07140c', win:'rgba(125,255,79,.4)',
   plat:'#35403a', brick:'#2c3630', top:'#5c7a5e', hi:'#6e9070', dark:'#182018',
   fog:'14,40,24', part:{c:'rgba(125,255,79,.4)',vy:-.42,vx:.22},
   roster:['ghoul','spitter','crawler','spitter']},
  {name:'FROZEN SECTOR', boss:'titan',
+  wx:{name:'BLIZZARD', tint:'rgba(220,235,255,.20)', kind:'snow', grav:1.14},
   sky:['#0a1020','#1c2c4a','#3a5a7d','#7d94ac'], sun:'#e8eef5', sunY:.23,
   far:'#1c2638', mid:'#101a2a', win:'rgba(150,200,255,.4)',
   plat:'#3a4048', brick:'#31363e', top:'#96a8ba', hi:'#c8d8e8', dark:'#20242c',
   fog:'40,55,80', part:{c:'rgba(240,248,255,.7)',vy:1.05,vx:.38},
   roster:['crawler','ghoul','flyer','crawler']},
  {name:'SCORCHED SANDS', boss:'wyrm',
+  wx:{name:'SANDSTORM', tint:'rgba(220,170,90,.18)', kind:'sand', speed:1.14},
   sky:['#2a1408','#6e2f10','#b85c1e','#d98a3a'], sun:'#ffd75e', sunY:.3,
   far:'#3a2412', mid:'#241408', win:'rgba(255,200,90,.4)',
   plat:'#5a4a36', brick:'#4c3e2c', top:'#8a7050', hi:'#a08560', dark:'#302416',
   fog:'70,45,20', part:{c:'rgba(230,180,110,.45)',vy:.3,vx:2.2},
   roster:['spitter','flyer','brute','ghoul']},
  {name:'DROWNED CITY', boss:'leviathan', water:true,
+  wx:{name:'DOWNPOUR', tint:'rgba(120,200,235,.12)', kind:'rain', rainC:'#a8dff0', speed:1.06},
   sky:['#050f1c','#0e2c42','#1f5c78','#3f95ad'], sun:'#cfe8f0', sunY:.26,
   far:'#132835', mid:'#0a1720', win:'rgba(120,210,235,.45)',
   plat:'#3a4a52', brick:'#31404a', top:'#6a8a96', hi:'#93b8c4', dark:'#1a2830',
   fog:'16,50,72', part:{c:'rgba(170,225,245,.45)',vy:-.6,vx:.2},
   roster:['flyer','spitter','ghoul','flyer']},
  {name:'INFERNO', boss:'colossus', fire:true,
+  wx:{name:'EMBER FALL', tint:'rgba(255,120,40,.12)', kind:'ember',
+      hazard:'fire', rate:.014},
   sky:['#180407','#4a0d0a','#a02a10','#e0621c'], sun:'#ffd24a', sunY:.28,
   far:'#3a1410', mid:'#200808', win:'rgba(255,140,50,.55)',
   plat:'#3a2420', brick:'#2e1c18', top:'#6a3a28', hi:'#8a4c34', dark:'#170e0c',
@@ -1286,6 +1294,7 @@ const G={
   hearts:3, invuln:0, shake:0, zone:0, zoneCount:0, banner:null,
   runCoins:0, safeDist:0, boss:null, nextBoss:1400, bossNum:0,
   combo:0, comboT:0, bestCombo:0, bossesRun:0,
+  wxT:0, wxOn:false, wxI:0,
   crates:[], picks:[], magnet:0, shield:0, dash:0,
   platforms:[], enemies:[], globs:[], coins:[], parts:[], pops:[], frame:0
 };
@@ -1657,6 +1666,7 @@ function resetRun(){
   Object.assign(G,{scroll:0,speed:4.5,dist:0,score:0,kills:0,hearts:maxHearts(),invuln:0,
     zone:0,zoneCount:0,banner:null,runCoins:0,safeDist:0,boss:null,nextBoss:1400,bossNum:0,
     combo:0,comboT:0,bestCombo:0,comboPts:0,bossesRun:0,
+    wxT:0,wxOn:false,wxI:0,
     crates:[],picks:[],magnet:0,shield:0,dash:0,
     platforms:[],enemies:[],globs:[],coins:[],parts:[],pops:[],crates:[],picks:[]});
   updateZone(); genPlatforms();
@@ -1853,12 +1863,46 @@ document.getElementById('btnTroph').addEventListener('click',()=>{renderTroph();
 document.getElementById('btnShopBack').addEventListener('click',()=>setOverlay('menu'));
 document.getElementById('btnTrophBack').addEventListener('click',()=>setOverlay('menu'));
 
+/* ================= WEATHER =================
+   Storms roll in and pass: ~8 s of calm, ~7 s of storm, with a
+   ramp at each edge so nothing snaps on or off. */
+const WX_CALM=480, WX_STORM=430, WX_RAMP=70;
+function updateWeather(dt){
+  G.wxT+=dt;
+  const span=G.wxOn?WX_STORM:WX_CALM;
+  if(G.wxT>span){
+    G.wxT=0; G.wxOn=!G.wxOn;
+    if(G.wxOn && !G.boss){
+      const w=ZONES[zCur].wx;
+      G.banner={txt:'⚠ '+w.name+' ⚠', l:110};
+      beep(180,.3,'sawtooth',.07,-50);
+    }
+  }
+  const ramp=Math.min(1, Math.min(G.wxT, span-G.wxT)/WX_RAMP);
+  G.wxI=G.wxOn ? ramp : 0;
+}
+/* how the current storm bends the rules */
+function wxMods(){
+  const w=ZONES[zCur].wx, i=G.wxI;
+  if(!w || i<=0) return {speed:1, grav:1};
+  return { speed:1+((w.speed||1)-1)*i, grav:1+((w.grav||1)-1)*i };
+}
+function wxHazards(dt){
+  const w=ZONES[zCur].wx;
+  if(!w || !w.hazard || G.wxI<.45) return;
+  if(Math.random() < w.rate*G.wxI*dt){
+    G.globs.push({x:G.scroll+rnd(-20,W+20), y:-30,
+      vx:rnd(-.6,.2), vy:rnd(4,5.6), grav:.05, col:w.hazard, hp:1, ph:0});
+  }
+}
+
 /* ================= UPDATE ================= */
 function update(dt){
   if(G.state!=='play'){ updateZone(); return; }
   G.frame+=dt;
   const bossFight=!!G.boss;
-  G.speed=Math.min(7.8, 4.5+G.dist/14000)*(G.dash>0?1.55:1);
+  const WM=wxMods();
+  G.speed=Math.min(7.8, 4.5+G.dist/14000)*(G.dash>0?1.55:1)*WM.speed;
   G.scroll+=G.speed*dt;
   if(!bossFight){                       // distance frozen during a boss fight
     G.dist+=G.speed*dt;
@@ -1870,7 +1914,8 @@ function update(dt){
   if(m>=1000) unlock('marathon');
   if(m>=5000) unlock('legend');
   if(!G.boss && m>=G.nextBoss) spawnBoss();
-  updateZone(); genPlatforms(); updateBoss(dt);
+  updateZone(); updateWeather(dt); wxHazards(dt);
+  genPlatforms(); updateBoss(dt);
   if(G.banner){ G.banner.l-=dt; if(G.banner.l<=0) G.banner=null; }
   if(G.comboT>0){ G.comboT-=dt; if(G.comboT<=0) G.combo=0; }
 
@@ -1888,7 +1933,7 @@ function update(dt){
     P.vy=-20.1; P.ground=false; P.coyote=0; P.jumpBuf=0; SFX.jump();
   }
   const prevB=P.y+P.h;
-  P.vy=Math.min(P.vy+0.825*dt,22.5);
+  P.vy=Math.min(P.vy+0.825*wxMods().grav*dt,22.5);
   P.y+=P.vy*dt;
   P.ground=false;
   const wx=G.scroll+P.sx;
@@ -2090,6 +2135,73 @@ function drawFire(a){
   ctx.globalAlpha=1;
 }
 
+/* ---- storm visuals: streaks, flakes, gusts, embers ---- */
+function drawWeather(){
+  const w=ZONES[zCur].wx, i=G.wxI;
+  if(!w || i<=0) return;
+  const f=G.frame;
+  ctx.globalAlpha=i;
+  if(w.kind==='rain'){
+    ctx.fillStyle=w.rainC;
+    for(let k=0;k<70;k++){
+      const x=((k*89 + f*9)%(W+120))-60;
+      const y=((k*151 + f*22)%(H+80))-40;
+      ctx.fillRect(x, y, 2, 14);
+      ctx.fillRect(x-1, y+14, 3, 3);
+    }
+    /* splashes along the ground line */
+    ctx.fillStyle='rgba(255,255,255,.30)';
+    for(let k=0;k<10;k++){
+      const x=(k*173 + Math.floor(f/7)*61)%W;
+      ctx.fillRect(x, H*.86+((k*29)%40), 6,2);
+    }
+  } else if(w.kind==='snow'){
+    ctx.fillStyle='#ffffff';
+    for(let k=0;k<80;k++){
+      const drift=Math.sin((f*.03)+k)*22;
+      const x=((k*71 + f*3.4 + drift)%(W+60))-30;
+      const y=((k*133 + f*5.2)%(H+40))-20;
+      const sz=(k%3)?3:4;
+      ctx.fillRect(x, y, sz, sz);
+    }
+    /* wind streaks */
+    ctx.fillStyle='rgba(255,255,255,.22)';
+    for(let k=0;k<14;k++){
+      const x=((k*211 + f*13)%(W+160))-80;
+      ctx.fillRect(x, (k*67)%H, 46, 2);
+    }
+  } else if(w.kind==='sand'){
+    for(let k=0;k<60;k++){
+      const x=((k*97 + f*17)%(W+200))-100;
+      const y=(k*139 + Math.sin(f*.04+k)*10)%H;
+      ctx.fillStyle=(k%2)?'rgba(230,190,120,.55)':'rgba(190,140,70,.45)';
+      ctx.fillRect(x, y, 22+((k*7)%18), 2);
+    }
+    ctx.fillStyle='rgba(210,160,80,.10)';
+    for(let k=0;k<5;k++){
+      const x=((k*331 + f*24)%(W+300))-150;
+      ctx.fillRect(x, (k*181)%H, 150, 26);
+    }
+  } else if(w.kind==='ember'){
+    for(let k=0;k<44;k++){
+      const x=((k*113 + Math.sin(f*.05+k)*14)%(W+40))-20;
+      const y=H - ((k*97 + f*4.6)%(H+60));
+      ctx.fillStyle=(k%3)?'#ff8a1e':'#ffd23c';
+      ctx.fillRect(x, y, 3, 4);
+    }
+  } else {                                   // ash / debris wind
+    ctx.fillStyle='rgba(210,190,165,.45)';
+    for(let k=0;k<40;k++){
+      const x=((k*127 + f*11)%(W+80))-40;
+      const y=(k*149 + f*3)%H;
+      ctx.fillRect(x, y, (k%4)?3:6, 3);
+    }
+  }
+  ctx.globalAlpha=1;
+  ctx.fillStyle=w.tint.replace(/[\d.]+\)$/, (parseFloat(w.tint.match(/[\d.]+\)$/)[0])*i)+')');
+  ctx.fillRect(0,0,W,H);
+}
+
 /* ================= RENDER ================= */
 function render(){
   const sky=ctx.createLinearGradient(0,0,0,H);
@@ -2225,6 +2337,8 @@ function render(){
   for(const p of G.pops){ ctx.fillStyle='#ffd75e'; ctx.fillText(p.txt,p.x-12,p.y); }
   ctx.restore();
 
+  drawWeather();
+
   /* HUD */
   const mh=maxHearts();
   for(let i=0;i<mh;i++) ctx.drawImage(HEART[i<G.hearts?0:1], 18+i*30, 18);
@@ -2263,6 +2377,14 @@ function render(){
   ctx.fillStyle='#f4e3c8'; ctx.fillText(String(G.score).padStart(6,'0'),W-16,36);
   ctx.font='11px "Press Start 2P", monospace'; ctx.fillStyle='#b7a58f';
   ctx.fillText(Math.floor(G.dist/15)+' m',W-16,60);
+  if(G.wxI>.15){
+    const w=ZONES[zCur].wx;
+    ctx.font='8px "Press Start 2P", monospace';
+    ctx.globalAlpha=Math.min(1,G.wxI*1.4);
+    ctx.fillStyle='#1a1016'; ctx.fillText('⚠ '+w.name, W-15, 81);
+    ctx.fillStyle='#ffd75e'; ctx.fillText('⚠ '+w.name, W-16, 80);
+    ctx.globalAlpha=1;
+  }
   ctx.textAlign='left';
 
   /* boss HP bar */
