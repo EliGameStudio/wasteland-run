@@ -166,7 +166,7 @@
       <button class="mbtn small" id="btnQuests">📋 DAILY</button>
       <button class="mbtn small" id="btnTrain">🧠 MATH</button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v6.4</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v6.6</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -1440,6 +1440,38 @@ const BOSS_SPR={
   colossus:[colossusFrame(false),colossusFrame(true)]
 };
 
+/* ---- roof hazards ---- */
+/* fan: hub + 3 blades, drawn at 4 rotations */
+const FAN_BLADE=[0,1,2,3].map(rot=>makeSpr(64,64,(p,g)=>{
+  g.save(); g.translate(32,32); g.rotate(rot*Math.PI/8);
+  const bl=(a)=>{ g.save(); g.rotate(a);
+    g.fillStyle='#7a828c'; g.fillRect(-5,-28,10,28);
+    g.fillStyle='#9aa2ac'; g.fillRect(-5,-28,4,28);
+    g.fillStyle='#5a626c'; g.fillRect(-6,-28,2,10);
+    g.restore(); };
+  bl(0); bl(2*Math.PI/3); bl(4*Math.PI/3);
+  g.restore();
+  p(26,26,12,12,'#3a4048'); p(28,28,8,8,'#6a727c'); p(30,30,4,4,'#2a2e34');
+}));
+const FAN_CAGE=makeSpr(72,72,p=>{
+  for(const [x,y] of [[0,32],[68,32],[32,0],[32,68]]) p(x,y,4,8,'#2a2e34');
+  p(4,4,3,3,'#4a4038'); p(65,4,3,3,'#4a4038'); p(4,65,3,3,'#4a4038'); p(65,65,3,3,'#4a4038');
+});
+/* steam valve: pipe + nozzle */
+const VALVE=makeSpr(30,34,p=>{
+  p(6,20,18,14,'#4a4038'); p(6,20,18,3,'#6a5f52');
+  p(10,10,10,12,'#5a5048'); p(10,10,10,3,'#7a6f62');
+  p(8,6,14,5,'#3a3430'); p(11,0,8,7,'#6a6058'); p(13,2,4,4,'#2a2620');
+  p(4,28,22,3,'#2a2620');
+});
+/* crumbling tile: intact / cracking / gone-ish */
+const TILE=[0,1,2].map(st=>makeSpr(60,20,p=>{
+  const shade=['#5a5048','#4a4038','#3a3028'][st];
+  p(0,0,60,16,shade); p(0,0,60,3,'#6a6058'); p(0,13,60,3,'#2a2620');
+  if(st>=1){ p(14,2,3,12,'#241c16'); p(34,4,3,10,'#241c16'); p(46,1,3,13,'#241c16'); }
+  if(st>=2){ p(6,6,8,8,'#1a1410'); p(40,8,10,6,'#1a1410'); p(24,3,6,10,'#1a1410'); }
+}));
+
 /* ---- crates & pickups ---- */
 const CRATE=[0,1].map(hit=>makeSpr(42,42,p=>{
   const b=hit?'#96693f':'#7a5636', d=hit?'#6a4a2e':'#5c3f26';
@@ -1614,7 +1646,7 @@ const ZONES=[
 function makeSkyline(w,h,base,winC,seed){
   return makeSpr(w,h,(p,g)=>{
     const R=sRnd(seed); let x=0;
-    while(x<w){
+    while(x<1074){
       const bw=30+R()*69, bh=h*(.3+R()*.65), top=h-bh;
       p(x,top,bw,bh,base);
       p(x,top,3,bh,'rgba(0,0,0,.25)');
@@ -1629,6 +1661,40 @@ function makeSkyline(w,h,base,winC,seed){
 }
 const FAR=ZONES.map((z,i)=>makeSkyline(1080,450,z.far,false,11+i*13));
 const MID=ZONES.map((z,i)=>makeSkyline(1080,510,z.mid,z.win,77+i*29));
+/* near foreground: jagged dark shapes that scroll faster than the world */
+function makeForeground(w,h,base,seed){
+  return makeSpr(w,h,(p0,g)=>{
+    const MX=6, TILE=1080;                    // margin for jutting parts
+    /* clamp: never draw outside [0,TILE] so the loop tiles seamlessly */
+    const p=(x,y,ww,hh,c)=>{
+      let x0=x+MX, x1=x0+ww;
+      x0=Math.max(0,x0); x1=Math.min(TILE+MX*2,x1);
+      let y0=Math.max(0,y), y1=Math.min(h,y+hh);
+      if(x1>x0 && y1>y0) p0(x0,y0,x1-x0,y1-y0,c);
+    };
+    const R=sRnd(seed); let x=0;
+    while(x<1040){
+      const kind=R();
+      if(kind<.4){                         // broken pillar / rebar
+        const pw=14+R()*22, ph=h*(.4+R()*.55);
+        p(x,h-ph,pw,ph,base);
+        for(let i=0;i<ph;i+=10) if(R()<.3) p(x+R()*pw,h-ph+i,4,6,'rgba(0,0,0,.5)');
+        if(R()<.5){ p(x-4,h-ph,3,14,base); p(x+pw,h-ph+8,3,10,base); }  // jutting bars
+      } else if(kind<.7){                  // slumped rubble mound
+        const mw=50+R()*70, mh=h*(.25+R()*.3);
+        for(let k=0;k<mw;k+=8){ const kh=mh*(1-Math.abs(k-mw/2)/(mw/2))*(.7+R()*.5);
+          p(x+k,h-kh,9,kh,base); }
+      } else {                             // dead tree / antenna spike
+        const tx=x+R()*30, th=h*(.5+R()*.4);
+        p(tx,h-th,5,th,base);
+        p(tx-10,h-th+12,12,4,base); p(tx+3,h-th+26,12,4,base);
+      }
+      x+=40+R()*90;
+    }
+  });
+}
+const NEAR=ZONES.map((z,i)=>makeForeground(1096,280,z.far==='#3a2412'?'#160c04':
+  ('#'+((parseInt(z.far.slice(1),16))&0x0f0f0f).toString(16).padStart(6,'0')), 200+i*17));
 
 let CZ={}, zPrev=0, zCur=0, zBlend=1;
 function updateZone(){
@@ -1689,7 +1755,7 @@ const G={
   runCoins:0, safeDist:0, boss:null, nextBoss:1400, bossNum:0,
   combo:0, comboT:0, bestCombo:0, bossesRun:0,
   wxT:0, wxOn:false, wxI:0, night:false, finalBeaten:false, nightFade:0,
-  crates:[], picks:[], bolts:[], magnet:0, shield:0,
+  crates:[], picks:[], bolts:[], hazards:[], magnet:0, shield:0,
   platforms:[], enemies:[], globs:[], coins:[], parts:[], pops:[], frame:0
 };
 const P={ sx:144, y:0, vy:0, w:39, h:66, ground:false, coyote:0,
@@ -1786,6 +1852,19 @@ function addPlatform(x,w,y){
   if(w>260 && G.dist>600 && Math.random()<.30){
     G.crates.push({x:x+80+Math.random()*(w-190), y:y-42, hp:1, flash:0});
   }
+  /* roof hazards, from 900 m onward, never overlapping the landing edges */
+  if(w>300 && G.dist/15>900 && !G.boss && Math.random()<.42){
+    const roll=Math.random(), hx=x+120+Math.random()*(w-240);
+    if(roll<.4){                    // spinning fan — jump or slide the blades
+      G.hazards.push({t:'fan', x:hx, y:y-30, rot:Math.random()*6, sp:.14+Math.random()*.08});
+    } else if(roll<.72){            // steam valve — timed bursts
+      G.hazards.push({t:'steam', x:hx, y, t2:Math.random()*120, on:false});
+    } else {                        // patch of crumbling tiles
+      const n=rndi(2,3);
+      for(let i=0;i<n;i++)
+        G.hazards.push({t:'tile', x:hx+i*60, y:y-16, y0:y, stage:0, standT:0, fall:0, vy:0});
+    }
+  }
 }
 function genPlatforms(){
   let last=G.platforms[G.platforms.length-1];
@@ -1812,6 +1891,7 @@ function genPlatforms(){
   G.coins=G.coins.filter(c=>c.x>G.scroll-45 && c.hp>0);
   G.crates=G.crates.filter(c=>c.x>G.scroll-60 && c.hp>0);
   G.picks=G.picks.filter(k=>k.x>G.scroll-60 && k.hp>0);
+  G.hazards=G.hazards.filter(h=>h.x>G.scroll-80);
 }
 
 /* ================= BOSSES: one per zone, distinct mechanics ================= */
@@ -2137,8 +2217,8 @@ function resetRun(){
     zone:0,zoneCount:0,banner:null,runCoins:0,safeDist:0,boss:null,nextBoss:1400,bossNum:0,
     combo:0,comboT:0,bestCombo:0,comboPts:0,bossesRun:0,
     wxT:0,wxOn:false,wxI:0,night:false,finalBeaten:false,nightFade:0,
-    crates:[],picks:[],bolts:[],magnet:0,shield:0,
-    platforms:[],enemies:[],globs:[],coins:[],parts:[],pops:[],crates:[],picks:[],bolts:[]});
+    crates:[],picks:[],bolts:[],hazards:[],magnet:0,shield:0,
+    platforms:[],enemies:[],globs:[],coins:[],parts:[],pops:[],crates:[],picks:[],bolts:[],hazards:[]});
   updateZone(); genPlatforms();
   P.h=H_STAND; P.slide=0; P.slideCd=0;
   P.y=G.platforms[0].y-P.h; P.vy=0; P.atk=0; P.atkCd=0;
@@ -2526,6 +2606,44 @@ function wxHazards(dt){
   }
 }
 
+/* ---- roof hazards: fans spin, valves puff, tiles crumble ---- */
+function updateHazards(dt){
+  const px=P.sx, pfeet=P.y+P.h, phead=P.y;
+  for(const h of G.hazards){
+    const hx=h.x-G.scroll;
+    if(h.t==='fan'){
+      h.rot+=h.sp*dt;
+      /* blade sweep hurts unless you slide under (short) or are airborne above it */
+      if(G.invuln<=0 && Math.abs(hx-px)<26){
+        const bladeTop=h.y-28, bladeBot=h.y+4;
+        if(pfeet>bladeTop && phead<bladeBot) loseHeart();
+      }
+    } else if(h.t==='steam'){
+      h.t2-=dt;
+      if(h.t2<=0){ h.on=!h.on; h.t2=h.on?46:90;
+        if(h.on && Math.abs(hx-px)<200) beep(320,.25,'sawtooth',.05,-120); }
+      if(h.on && G.invuln<=0 && Math.abs(hx-px)<20){
+        const top=h.y-120;                  // steam column rises above the valve
+        if(phead<h.y && pfeet>top) loseHeart();
+      }
+      if(h.on && Math.random()<.4)
+        G.parts.push({x:h.x-G.scroll+rnd(-6,6),y:h.y-20-rnd(0,90),
+          vx:rnd(-.6,.6),vy:rnd(-3,-1),l:rnd(12,22),c:'rgba(220,225,230,.5)'});
+    } else if(h.t==='tile'){
+      /* stands intact until the player is on it, then cracks and drops */
+      if(h.fall>0){ h.vy+=.7*dt; h.y+=h.vy*dt; h.fall-=dt; }
+      else if(h.stage<2){
+        const on = Math.abs(hx-px)<30 && Math.abs(pfeet-h.y0)<12 && P.ground;
+        if(on){ h.standT+=dt;
+          if(h.standT>10 && h.stage<1){ h.stage=1; }
+          if(h.standT>22){ h.stage=2; h.fall=60; h.vy=0;
+            SFX.thud(); }
+        } else if(h.stage<2 && h.standT>0){ h.standT=Math.max(0,h.standT-dt*.5); }
+      }
+    }
+  }
+}
+
 /* one place where an enemy dies, whichever weapon killed it */
 function onEnemyKilled(e, ex){
   G.kills++; META.totalKills++; questProgress('kills',1);
@@ -2639,7 +2757,7 @@ function update(dt){
   if(m>=5000) unlock('legend');
   if(!G.boss && m>=G.nextBoss) spawnBoss();
   updateZone(); updateWeather(dt); wxHazards(dt);
-  genPlatforms(); updateBoss(dt); updateBolts(dt);
+  genPlatforms(); updateBoss(dt); updateBolts(dt); updateHazards(dt);
   if(G.banner){ G.banner.l-=dt; if(G.banner.l<=0) G.banner=null; }
   if(G.comboT>0){ G.comboT-=dt; if(G.comboT<=0) G.combo=0; }
 
@@ -2661,7 +2779,15 @@ function update(dt){
   P.ground=false;
   const wx=G.scroll+P.sx;
   const wasAir=!P.ground;
-  if(P.vy>=0) for(const pl of G.platforms){
+  /* a fully collapsed tile under the player removes footing → you drop */
+  let tileGap=false;
+  for(const h of G.hazards){
+    if(h.t==='tile' && h.stage>=2){
+      const hx=h.x-G.scroll;
+      if(Math.abs(hx-P.sx)<26 && Math.abs((P.y+P.h)-h.y0)<14){ tileGap=true; break; }
+    }
+  }
+  if(P.vy>=0 && !tileGap) for(const pl of G.platforms){
     if(wx+P.w/2>pl.x && wx-P.w/2<pl.x+pl.w && prevB<=pl.y+9 && P.y+P.h>=pl.y){
       const impact=P.vy;
       P.y=pl.y-P.h; P.vy=0; P.ground=true;
@@ -2818,6 +2944,18 @@ function update(dt){
 function drawWater(a){
   if(a<=0) return;
   const lvl=H*.87;
+  /* wobbling mirror of the mid-city skyline */
+  ctx.save();
+  ctx.beginPath(); ctx.rect(0,lvl,W,H-lvl); ctx.clip();
+  ctx.globalAlpha=a*.28;
+  let ox=-(G.scroll*.4)%1080; if(ox>0)ox-=1080;
+  const wob=Math.sin(G.frame*.06)*3;
+  ctx.save();
+  ctx.translate(0, lvl*2 - H*.30 + wob);
+  ctx.scale(1,-1);                              // flip vertically = reflection
+  for(let i=0;i<3;i++) ctx.drawImage(MID[zCur], ox+i*1080, -H*.30);
+  ctx.restore();
+  ctx.restore();
   ctx.globalAlpha=a*.72;
   ctx.fillStyle='#12506e'; ctx.fillRect(0,lvl,W,H-lvl);
   ctx.globalAlpha=a;
@@ -2955,9 +3093,19 @@ function render(){
   sky.addColorStop(0,CZ.sky[0]); sky.addColorStop(.45,CZ.sky[1]);
   sky.addColorStop(.75,CZ.sky[2]); sky.addColorStop(1,CZ.sky[3]);
   ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
-  ctx.fillStyle=CZ.sun; ctx.beginPath(); ctx.arc(W*.72,H*CZ.sunY,66,0,7); ctx.fill();
-  ctx.fillStyle='rgba(0,0,0,.18)';
-  ctx.fillRect(W*.72-78,H*CZ.sunY-12,156,8); ctx.fillRect(W*.72-72,H*CZ.sunY+12,144,6);
+  if(G.nightFade<1){
+    /* the sun sinks slowly as you cross a zone (0..1 through the 1500 m) */
+    const into=((G.dist/15)%ZONE_M)/ZONE_M;
+    const sunY=H*(CZ.sunY + into*0.10);
+    const sunX=W*(.72 - into*0.06);
+    ctx.globalAlpha=1-G.nightFade;
+    /* halo */
+    glowAt(sunX, sunY, 220, CZ.glow||CZ.sun, .22*(1-G.nightFade));
+    ctx.fillStyle=CZ.sun; ctx.beginPath(); ctx.arc(sunX,sunY,66,0,7); ctx.fill();
+    ctx.fillStyle='rgba(0,0,0,.18)';
+    ctx.fillRect(sunX-78,sunY-12,156,8); ctx.fillRect(sunX-72,sunY+12,144,6);
+    ctx.globalAlpha=1;
+  }
 
   const pp=CZ.part; ctx.fillStyle=pp.c;
   for(let i=0;i<34;i++){
@@ -2987,6 +3135,31 @@ function render(){
   const wA=(ZONES[zCur].water?zBlend:0)+(ZONES[zPrev].water?1-zBlend:0);
   const fA=(ZONES[zCur].fire ?zBlend:0)+(ZONES[zPrev].fire ?1-zBlend:0);
   drawWater(wA); drawFire(fA);
+
+  /* ---- roof hazards ---- */
+  for(const h of G.hazards){
+    const hx=Math.round(h.x-G.scroll);
+    if(h.t==='fan'){
+      ctx.drawImage(FAN_CAGE, hx-36, Math.round(h.y-36));
+      const fr=Math.floor(h.rot/(Math.PI/8))%4;
+      ctx.drawImage(FAN_BLADE[((fr%4)+4)%4], hx-32, Math.round(h.y-32));
+    } else if(h.t==='steam'){
+      ctx.drawImage(VALVE, hx-15, Math.round(h.y-34));
+      if(h.on){
+        /* rising steam column */
+        for(let i=0;i<7;i++){
+          const yy=h.y-20-i*16, w=10+i*3;
+          ctx.fillStyle='rgba(230,235,240,'+(.35-i*.04)+')';
+          ctx.fillRect(hx-w/2+Math.sin((G.frame*.2)+i)*3, yy, w, 14);
+        }
+      } else if(h.t2<24){
+        /* hiss warning: valve glows just before it blows */
+        glowAt(hx, h.y-24, 30, '#e8e3d8', .3+Math.sin(G.frame*.4)*.15);
+      }
+    } else if(h.t==='tile'){
+      ctx.drawImage(TILE[h.stage], hx-30, Math.round(h.y));
+    }
+  }
 
   for(const c of G.coins){
     const f=Math.abs(Math.floor(c.ph*1.4)%4);
@@ -3087,6 +3260,17 @@ function render(){
   ctx.font='12px "Press Start 2P", monospace';
   for(const p of G.pops){ ctx.fillStyle='#ffd75e'; ctx.fillText(p.txt,p.x-12,p.y); }
   ctx.restore();
+
+  /* near foreground silhouettes, fastest parallax, tinted by fog */
+  {
+    let ox=-(G.scroll*.72)%1080; if(ox>0)ox-=1080;
+    const yy=H-280+18;
+    if(zBlend<1){ ctx.globalAlpha=1-zBlend;
+      for(let i=0;i<3;i++) ctx.drawImage(NEAR[zPrev],ox+i*1080,yy); }
+    ctx.globalAlpha=zBlend<1?zBlend:1;
+    for(let i=0;i<3;i++) ctx.drawImage(NEAR[zCur],ox+i*1080,yy);
+    ctx.globalAlpha=1;
+  }
 
   drawNight();
   drawWeather();
