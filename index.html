@@ -140,7 +140,7 @@
       <button class="mbtn small" id="btnRank">🏅 RANKING</button>
       <button class="mbtn small" id="btnName" style="font-size:8px">PLAYER: —</button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v4.1</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v4.2</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -418,28 +418,53 @@ const SKINS=[
   gog:'#ffffff',gogSh:'#c8c8d0',rim:'#0e0e12',
   pants:'#e8483c',pantsSh:'#a8281e',boots:'#ffd23c',
   glove:'#ffffff',skin:'#f8ecd8',blade:'#ffffff',bladeSh:'#b8bcc4',
-  toon:true}
+  toon:true},
+ {id:'warden', name:'NIGHT WARDEN', cost:20000, prem:true,
+  hood:'#252a33',hoodHi:'#3e4756',hoodSh:'#131720',
+  jkt:'#2b3140',jktHi:'#454f63',jktSh:'#171b25',
+  belt:'#c8a23c',pack:'#1b1f28',packHi:'#2e3644',
+  scarf:'#3a4152',scarf2:'#232935',
+  gog:'#9fe8ff',gogSh:'#4f9fc0',rim:'#0e1118',
+  pants:'#242935',pantsSh:'#151921',boots:'#12151c',
+  glove:'#1b1f28',skin:'#3a4152',blade:'#cfe4f2',bladeSh:'#65798c',
+  cape:true, capeA:'#1d222c', capeB:'#2b3242', capeC:'#131720'}
 ];
 const skinById=id=>SKINS.find(s=>s.id===id);
 
 /* ================= DETAILED PLAYER SPRITES =================
    body box 39x66; canvas 72x84 with origin (18,6) so scarf
    and blade have room. 1px blocks, 3–4 shades per material. */
-const POX=20, POY=8;
+const POX=20, POY=22;   // taller frame: the Warden's cowl horns need room
 function drawPlayerBody(p,sk,pose){
   const legs=pose.legs, bob=pose.bob|0, atk=pose.atk;
   const o=(x,y,w,h,c)=>p(POX+x,POY+y+bob,w,h,c);
   const ground=(x,y,w,h,c)=>p(POX+x,POY+y,w,h,c);   // legs don't bob
 
-  /* ---- scarf, trailing left ---- */
-  o(-3,28,10,5,sk.scarf); o(-9,30,8,4,sk.scarf2);
-  o(-15,32,7,4,sk.scarf); o(-19,34,5,3,sk.scarf2);
-  o(-3,28,10,2,sk.scarf); // highlight edge
+  if(sk.cape){
+    /* ---- tattered cape, billowing behind ---- */
+    const f=(legs===1||legs===3)?1:0;              // flutter with the stride
+    o(-2,20,10,34,sk.capeB);                      // near shoulder
+    o(-10,22,10,32,sk.capeA);
+    o(-18,25+f,9,28,sk.capeA);
+    o(-18,25+f,9,3,sk.capeB);                     // rim light
+    o(-2,20,10,3,sk.capeB);
+    /* ragged hem */
+    o(-18,53+f,4,7,sk.capeC); o(-12,52,4,9,sk.capeC);
+    o(-6,54,4,6,sk.capeC);    o(0,52,4,10,sk.capeC);
+    o(5,54,4,6,sk.capeC);
+    /* clasp at the throat */
+    o(0,20,7,4,sk.belt); o(1,21,3,2,'#ffe08a');
+  } else {
+    /* ---- scarf, trailing left ---- */
+    o(-3,28,10,5,sk.scarf); o(-9,30,8,4,sk.scarf2);
+    o(-15,32,7,4,sk.scarf); o(-19,34,5,3,sk.scarf2);
+    o(-3,28,10,2,sk.scarf); // highlight edge
 
-  /* ---- backpack ---- */
-  o(-4,36,8,20,sk.pack); o(-4,36,8,3,sk.packHi);
-  o(-4,44,8,2,sk.belt);  o(1,38,2,16,sk.packHi);
-  o(-5,40,2,5,sk.belt);  // strap buckle
+    /* ---- backpack ---- */
+    o(-4,36,8,20,sk.pack); o(-4,36,8,3,sk.packHi);
+    o(-4,44,8,2,sk.belt);  o(1,38,2,16,sk.packHi);
+    o(-5,40,2,5,sk.belt);  // strap buckle
+  }
 
   /* ---- legs (4 poses) ---- */
   const L=(x,y,h2,c,cs)=>{ ground(x,y,10,h2,c); ground(x,y,3,h2,cs); };
@@ -485,6 +510,13 @@ function drawPlayerBody(p,sk,pose){
   if(sk.spots){                        // beetle pattern
     o(6,30,4,4,'#1a1216'); o(24,33,5,5,'#1a1216'); o(15,32,3,3,'#1a1216');
   }
+  if(sk.cape){                         // warden: shield emblem + armour plates
+    o(4,27,10,2,sk.jktHi); o(24,27,10,2,sk.jktHi);      // pectoral plates
+    o(17,28,9,8,sk.belt);                               // shield
+    o(18,29,7,4,'#ffe08a');
+    o(19,33,5,3,sk.belt); o(20,34,3,2,'#ffe08a');       // tapered point
+    o(3,44,6,4,sk.jktSh); o(29,44,6,4,sk.jktSh);        // hip guards
+  }
   if(sk.toon){                         // toon suspenders
     o(8,24,3,16,'#ffd23c'); o(28,24,3,16,'#ffd23c');
   }
@@ -498,15 +530,29 @@ function drawPlayerBody(p,sk,pose){
     o(-2,-6,10,10,sk.hood); o(31,-6,10,10,sk.hood);
     o(0,-6,6,3,sk.hoodHi); o(33,-6,6,3,sk.hoodHi);
   }
+  if(sk.cape){                         // warden: swept-back cowl horns
+    o(6,-12,5,9,sk.hood);  o(7,-17,4,6,sk.hood);  o(8,-21,3,5,sk.hoodHi);
+    o(27,-12,5,9,sk.hood); o(27,-17,4,6,sk.hood); o(27,-21,3,5,sk.hoodHi);
+    o(3,-4,33,3,sk.hoodHi);
+  }
   /* face plate */
   o(8,8,23,13,sk.skin);
   o(8,8,23,2,'#e0cbb0'); o(8,19,23,2,'#a08a72');
+  if(sk.cape){
+    /* narrow glowing visor slits */
+    o(6,9,12,7,sk.rim); o(21,9,12,7,sk.rim);
+    o(7,11,10,3,sk.gogSh); o(22,11,10,3,sk.gogSh);
+    o(7,11,10,2,sk.gog);   o(22,11,10,2,sk.gog);
+    o(8,11,3,2,'#eaffff'); o(23,11,3,2,'#eaffff');
+    o(18,10,3,5,sk.rim);
+  } else {
   /* goggles: rim, lens, gradient, glint */
   o(7,9,11,8,sk.rim); o(21,9,11,8,sk.rim);
   o(8,10,9,6,sk.gogSh); o(22,10,9,6,sk.gogSh);
   o(8,10,9,3,sk.gog);  o(22,10,9,3,sk.gog);
   o(9,11,3,2,'#ffffff'); o(23,11,3,2,'#ffffff');
   o(18,11,3,3,sk.rim);                 // nose bridge
+  }
   /* respirator + rivets */
   o(14,20,11,7,'#8a8f96'); o(14,20,11,2,'#b4bac2');
   o(15,22,2,2,'#4a4f56'); o(22,22,2,2,'#4a4f56');
@@ -539,11 +585,11 @@ function drawPlayerBody(p,sk,pose){
 const PSPR={};
 for(const sk of SKINS){
   PSPR[sk.id]={
-    run:[0,1,2,3].map(i=>makeSpr(96,92,p=>drawPlayerBody(p,sk,
+    run:[0,1,2,3].map(i=>makeSpr(96,106,p=>drawPlayerBody(p,sk,
         {legs:i, bob:(i===1||i===3)?1:0, atk:false}))),
-    jump: makeSpr(96,92,p=>drawPlayerBody(p,sk,{legs:'air',bob:0,atk:false})),
-    atk:  makeSpr(96,92,p=>drawPlayerBody(p,sk,{legs:'land',bob:0,atk:true})),
-    icon: makeSpr(96,92,p=>drawPlayerBody(p,sk,{legs:1,bob:0,atk:false}))
+    jump: makeSpr(96,106,p=>drawPlayerBody(p,sk,{legs:'air',bob:0,atk:false})),
+    atk:  makeSpr(96,106,p=>drawPlayerBody(p,sk,{legs:'land',bob:0,atk:true})),
+    icon: makeSpr(96,106,p=>drawPlayerBody(p,sk,{legs:1,bob:0,atk:false}))
   };
 }
 
@@ -1541,7 +1587,7 @@ function renderShop(){
   for(const sk of SKINS){
     const owned=META.skins.includes(sk.id), eq=META.skin===sk.id;
     const row=document.createElement('div'); row.className='item';
-    const c=document.createElement('canvas'); c.width=96; c.height=92;
+    const c=document.createElement('canvas'); c.width=96; c.height=106;
     if(sk.prem) c.classList.add('prem');
     c.getContext('2d').drawImage(PSPR[sk.id].icon,0,0);
     row.appendChild(c);
