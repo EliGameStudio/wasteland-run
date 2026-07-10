@@ -104,6 +104,15 @@
   .qbtn.good { background:linear-gradient(#4f8a34,#356022); }
   .qbtn.bad  { background:linear-gradient(#a03427,#6e2118); }
 
+  #quiz2 { font-size:24px; color:#ffd75e; margin:14px 0 18px;
+    text-shadow:0 4px 0 #4a1d12; letter-spacing:2px; }
+  #trainOpts { display:grid; grid-template-columns:1fr 1fr; gap:10px; width:280px; }
+  .qrow { display:flex; align-items:center; gap:10px; padding:11px 6px;
+    border-bottom:2px solid rgba(255,255,255,.06); text-align:left; font-size:9px; }
+  .qrow:last-child { border-bottom:none; }
+  .qbar { height:8px; background:#3a2430; border-radius:4px; overflow:hidden; margin-top:5px; }
+  .qbar i { display:block; height:100%; background:#7dd35f; }
+  .qdone { color:#7dd35f; }
   #nameInput { width:80%; max-width:260px; margin-top:22px; padding:14px;
     font-family:inherit; font-size:14px; text-align:center; color:#ffd75e;
     background:#1a1016; border:4px solid #5a6338; border-radius:10px;
@@ -153,7 +162,11 @@
       <button class="mbtn small" id="btnRank">🏅 RANKING</button>
       <button class="mbtn small" id="btnName" style="font-size:8px">PLAYER: —</button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v5.4</div>
+    <div class="row">
+      <button class="mbtn small" id="btnQuests">📋 DAILY</button>
+      <button class="mbtn small" id="btnTrain">🧠 MATH</button>
+    </div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v5.5</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -184,6 +197,33 @@
     <div class="sub" style="color:#ffd75e" id="shopCoins"></div>
     <div class="panel" id="shopList"></div>
     <button class="mbtn small" id="btnShopBack">◄ BACK</button>
+  </div>
+
+  <div class="overlay" id="quests">
+    <div class="title" style="font-size:16px">DAILY QUESTS</div>
+    <div class="sub" id="questHint" style="margin-top:4px"></div>
+    <div class="panel" id="questList"></div>
+    <button class="mbtn small" id="btnQuestsBack">◄ BACK</button>
+  </div>
+
+  <div class="overlay" id="train">
+    <div class="title" style="font-size:16px" id="trainTitle">MATH TRAINING</div>
+    <div id="trainSetup">
+      <div class="sub">Pick a table and beat the clock.<br>Every correct answer = 5 ⛁</div>
+      <div class="tabs" id="opTabs" style="justify-content:center">
+        <button class="tab on" data-op="mul">a × b</button>
+        <button class="tab" data-op="div">a ÷ b</button>
+        <button class="tab" data-op="add">a + b</button>
+      </div>
+      <button class="mbtn" id="btnTrainGo">▶ START · 20 QUESTIONS</button>
+    </div>
+    <div id="trainPlay" style="display:none">
+      <div class="sub" id="trainProg"></div>
+      <div id="quiz2">? × ? = ?</div>
+      <div id="trainOpts"></div>
+      <div class="sub" id="trainMsg" style="min-height:20px"></div>
+    </div>
+    <button class="mbtn small" id="btnTrainBack">◄ BACK</button>
   </div>
 
   <div class="overlay" id="troph">
@@ -404,6 +444,62 @@ async function syncLB(){
 if(LB_URL) syncLB().catch(()=>{});
 
 let rankScope='week', rankMetric='score';
+
+/* ================= DAILY QUESTS =================
+   Three quests, rerolled every calendar day. The day's date seeds the
+   picker, so every family member gets the SAME three quests. */
+const QUEST_POOL=[
+ {id:'run800',  txt:'Run 800 m in one run',       goal:800,  reward:150, track:'runDist'},
+ {id:'run2k',   txt:'Run 2,000 m in one run',     goal:2000, reward:300, track:'runDist'},
+ {id:'kill15',  txt:'Slay 15 mutants today',      goal:15,   reward:150, track:'kills'},
+ {id:'kill40',  txt:'Slay 40 mutants today',      goal:40,   reward:300, track:'kills'},
+ {id:'coins60', txt:'Collect 60 coins today',     goal:60,   reward:150, track:'coins'},
+ {id:'boss1',   txt:'Defeat a zone boss',         goal:1,    reward:250, track:'bosses'},
+ {id:'boss3',   txt:'Defeat 3 zone bosses today', goal:3,    reward:400, track:'bosses'},
+ {id:'combo4',  txt:'Reach a x4 combo',           goal:4,    reward:200, track:'combo'},
+ {id:'crate5',  txt:'Smash 5 supply crates',      goal:5,    reward:180, track:'crates'},
+ {id:'zone3',   txt:'Reach zone 3 in one run',    goal:3,    reward:220, track:'zone'},
+ {id:'noHit500',txt:'Run 500 m without damage',   goal:500,  reward:220, track:'safe'},
+ {id:'math5',   txt:'Answer 5 MATH questions',    goal:5,    reward:150, track:'math'}
+];
+const dayKey=()=>{ const d=new Date();
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+
+function pickQuests(key){
+  let h=0; for(let i=0;i<key.length;i++) h=(h*31+key.charCodeAt(i))>>>0;
+  const r=sRnd(h||1), pool=QUEST_POOL.slice(), out=[];
+  while(out.length<3 && pool.length){
+    out.push(pool.splice(Math.floor(r()*pool.length),1)[0]);
+  }
+  return out;
+}
+/* progress lives in META.quests = {day, prog:{id:n}, done:{id:true}} */
+function questState(){
+  const key=dayKey();
+  if(!META.quests || META.quests.day!==key)
+    META.quests={day:key, prog:{}, done:{}};
+  return META.quests;
+}
+function questProgress(track, value, mode){
+  if(G.state!=='play' && track!=='math') return;
+  const q=questState();
+  for(const def of pickQuests(q.day)){
+    if(def.track!==track || q.done[def.id]) continue;
+    const cur=q.prog[def.id]||0;
+    const next = mode==='max' ? Math.max(cur,value) : cur+value;
+    q.prog[def.id]=next;
+    if(next>=def.goal){
+      q.done[def.id]=true;
+      META.coins+=def.reward; META.earned+=def.reward;
+      toast('📋 QUEST COMPLETE<br>'+def.txt+'<br>+'+def.reward+' ⛁');
+      SFX.ach();
+    }
+  }
+  saveMeta();
+}
+function questsLeft(){
+  const q=questState(); return pickQuests(q.day).filter(d=>!q.done[d.id]).length;
+}
 async function renderRank(){
   const hint=document.getElementById('rankHint');
   const list=document.getElementById('rankList');
@@ -1586,7 +1682,7 @@ function updateBoss(dt){
       G.nextBoss=Math.floor(G.dist/15)+ZONE_M;    // next zone's boss
       META.coins+=100; META.earned+=100; G.runCoins+=100;
       if(META.earned>=100) unlock('hoard');
-      META.bossKills++; G.bossesRun++; unlock('boss'); saveMeta();
+      META.bossKills++; G.bossesRun++; questProgress('bosses',1); unlock('boss'); saveMeta();
       G.enemies.length=0; G.globs.length=0;        // clear minions & shots
       G.banner={txt:'BOSS DEFEATED! +100 ⛁', l:160};
       SFX.heart();
@@ -1708,10 +1804,14 @@ function loseHeart(){
     setOverlay('choice');
   } else respawn();
 }
-const OVERLAYS=['menu','choice','adBox','shop','troph','rank','nameBox'];
+const OVERLAYS=['menu','choice','adBox','shop','troph','rank','nameBox','quests','train'];
 function setOverlay(id){
   for(const o of OVERLAYS) document.getElementById(o).classList.toggle('show',o===id);
-  if(id==='menu') document.getElementById('menuCoins').textContent='⛁ '+META.coins+' coins';
+  if(id==='menu'){
+    document.getElementById('menuCoins').textContent='⛁ '+META.coins+' coins';
+    const left=questsLeft();
+    document.getElementById('btnQuests').textContent=left?('📋 DAILY ('+left+')'):'📋 DAILY ✓';
+  }
 }
 
 /* ---- MATH BREAK: answer a times-table question to revive ---- */
@@ -1740,6 +1840,7 @@ function newQuiz(){
       if(v===right){
         quizLock=true;
         btn.classList.add('good');
+        questProgress('math',1);
         document.getElementById('adTimer').textContent='Correct! '+a+' × '+b+' = '+right;
         SFX.heart();
         setTimeout(()=>{
@@ -1787,7 +1888,7 @@ document.getElementById('btnNameOk').addEventListener('click',confirmName);
 document.getElementById('nameInput').addEventListener('keydown',
   e=>{ if(e.key==='Enter') confirmName(); });
 document.getElementById('btnName').addEventListener('click',askName);
-bindTabs();
+bindTabs(); bindTrain();
 document.getElementById('btnRank').addEventListener('click',
   ()=>{ setOverlay('rank'); renderRank(); });
 document.getElementById('btnRankBack').addEventListener('click',()=>setOverlay('menu'));
@@ -1858,6 +1959,115 @@ function renderTroph(){
     list.appendChild(row);
   }
 }
+/* ---------------- DAILY QUESTS SCREEN ---------------- */
+function renderQuests(){
+  const q=questState();
+  const list=document.getElementById('questList'); list.innerHTML='';
+  const left=questsLeft();
+  document.getElementById('questHint').innerHTML=
+    (left? left+' of 3 remaining' : 'All done — come back tomorrow!')+
+    '<br>New quests every day, same for everyone';
+  for(const def of pickQuests(q.day)){
+    const cur=Math.min(q.prog[def.id]||0, def.goal), done=!!q.done[def.id];
+    const row=document.createElement('div'); row.className='qrow';
+    row.innerHTML=
+      '<div style="font-size:16px;flex:none">'+(done?'✅':'📋')+'</div>'+
+      '<div style="flex:1">'+
+        '<div class="'+(done?'qdone':'')+'">'+def.txt+'</div>'+
+        '<div class="qbar"><i style="width:'+Math.round(100*cur/def.goal)+'%"></i></div>'+
+        '<div style="font-size:8px;color:#b7a58f;margin-top:4px">'+cur+' / '+def.goal+'</div>'+
+      '</div>'+
+      '<div style="color:#ffd75e;font-size:9px;flex:none">+'+def.reward+' ⛁</div>';
+    list.appendChild(row);
+  }
+}
+
+/* ---------------- MATH TRAINING ---------------- */
+const TRAIN_N=20, TRAIN_REWARD=5;
+let trainOp='mul', trainQ=0, trainRight=0, trainLock=false, trainStart=0;
+function makeQuestion(op){
+  let a,b,right,txt;
+  if(op==='mul'){ a=rndi(2,9); b=rndi(2,9); right=a*b; txt=a+' × '+b; }
+  else if(op==='div'){ b=rndi(2,9); right=rndi(2,9); a=b*right; txt=a+' ÷ '+b; }
+  else { a=rndi(5,49); b=rndi(5,49); right=a+b; txt=a+' + '+b; }
+  const cand=[right+1,right-1,right+a,Math.abs(right-b),right+b,
+              op==='mul'?a*(b+1):right+10, op==='mul'?(a+1)*b:right-10];
+  const wrong=new Set();
+  let guard=0;
+  while(wrong.size<3 && guard++<60){
+    const v=cand[rndi(0,cand.length-1)];
+    if(v>0 && v!==right) wrong.add(v);
+  }
+  while(wrong.size<3) wrong.add(right+wrong.size+2);
+  return {txt, right, opts:[right,...wrong].sort(()=>Math.random()-.5)};
+}
+function trainNext(){
+  trainLock=false;
+  if(trainQ>=TRAIN_N){
+    const secs=Math.round((Date.now()-trainStart)/1000);
+    document.getElementById('trainPlay').style.display='none';
+    document.getElementById('trainSetup').style.display='';
+    document.getElementById('trainTitle').textContent='WELL DONE!';
+    document.getElementById('trainProg').textContent='';
+    toast('🧠 '+trainRight+'/'+TRAIN_N+' correct in '+secs+'s<br>+'+
+          (trainRight*TRAIN_REWARD)+' ⛁');
+    return;
+  }
+  trainQ++;
+  document.getElementById('trainProg').textContent=
+    'Question '+trainQ+' / '+TRAIN_N+'   ·   '+trainRight+' correct';
+  const q=makeQuestion(trainOp);
+  document.getElementById('quiz2').textContent=q.txt+' = ?';
+  const box=document.getElementById('trainOpts'); box.innerHTML='';
+  for(const v of q.opts){
+    const b=document.createElement('button');
+    b.className='qbtn'; b.textContent=v;
+    b.onclick=()=>{
+      if(trainLock) return;
+      initAudio();
+      if(v===q.right){
+        trainLock=true; b.classList.add('good');
+        trainRight++;
+        META.coins+=TRAIN_REWARD; META.earned+=TRAIN_REWARD; saveMeta();
+        questProgress('math',1);
+        document.getElementById('trainMsg').textContent='Correct! +'+TRAIN_REWARD+' ⛁';
+        SFX.coin();
+        setTimeout(trainNext,520);
+      } else {
+        b.classList.add('bad'); b.disabled=true;
+        document.getElementById('trainMsg').textContent='Try again';
+        SFX.hurt();
+      }
+    };
+    box.appendChild(b);
+  }
+  document.getElementById('trainMsg').textContent='';
+}
+function trainStartRun(){
+  trainQ=0; trainRight=0; trainStart=Date.now();
+  document.getElementById('trainTitle').textContent='MATH TRAINING';
+  document.getElementById('trainSetup').style.display='none';
+  document.getElementById('trainPlay').style.display='';
+  trainNext();
+}
+function bindTrain(){
+  document.querySelectorAll('#opTabs .tab').forEach(b=>b.onclick=()=>{
+    trainOp=b.dataset.op;
+    document.querySelectorAll('#opTabs .tab').forEach(x=>x.classList.toggle('on',x===b));
+    initAudio(); SFX.coin();
+  });
+}
+document.getElementById('btnQuests').addEventListener('click',()=>{renderQuests(); setOverlay('quests');});
+document.getElementById('btnQuestsBack').addEventListener('click',()=>setOverlay('menu'));
+document.getElementById('btnTrain').addEventListener('click',()=>{
+  document.getElementById('trainTitle').textContent='MATH TRAINING';
+  document.getElementById('trainSetup').style.display='';
+  document.getElementById('trainPlay').style.display='none';
+  setOverlay('train');
+});
+document.getElementById('btnTrainGo').addEventListener('click',trainStartRun);
+document.getElementById('btnTrainBack').addEventListener('click',()=>setOverlay('menu'));
+
 document.getElementById('btnShop').addEventListener('click',()=>{renderShop(); setOverlay('shop');});
 document.getElementById('btnTroph').addEventListener('click',()=>{renderTroph(); setOverlay('troph');});
 document.getElementById('btnShopBack').addEventListener('click',()=>setOverlay('menu'));
@@ -1910,6 +2120,9 @@ function update(dt){
   }
   if(G.safeDist>=7500) unlock('untouch');
   G.score=Math.floor(G.dist/15)+(G.comboPts||0);
+  questProgress('runDist',Math.floor(G.dist/15),'max');
+  questProgress('safe',Math.floor(G.safeDist/15),'max');
+  questProgress('zone',G.zoneCount+1,'max');
   const m=G.dist/15;
   if(m>=1000) unlock('marathon');
   if(m>=5000) unlock('legend');
@@ -1955,6 +2168,7 @@ function update(dt){
        c.y+42>P.y-9 && c.y<P.y+P.h+9){
       c.hp--; c.hitCd=20; c.flash=10; G.shake=5;
       if(c.hp<=0){
+        questProgress('crates',1);
         SFX.thud();
         for(let i=0;i<18;i++) G.parts.push({x:cx+21,y:c.y+21,
           vx:rnd(-5,6),vy:rnd(-7,1),l:rnd(14,30),c:i%3?'#7a5636':'#a87b4c'});
@@ -2006,6 +2220,7 @@ function update(dt){
     const cx=c.x-G.scroll;
     if(Math.abs(cx-P.sx)<30 && Math.abs(c.y-(P.y+P.h/2))<51){
       c.hp=0; META.coins++; META.earned++; G.runCoins++;
+      questProgress('coins',1);
       if(META.earned>=100) unlock('hoard');
       SFX.coin(); G.pops.push({x:cx,y:c.y-9,l:26,txt:'+1'});
     }
@@ -2041,12 +2256,13 @@ function update(dt){
       if(ex+e.w/2>hx && ex-e.w/2<hx+hr && e.y+e.h>P.y-9 && e.y<P.y+P.h+9){
         e.hp--; e.hitCd=22;
         if(e.hp<=0){
-          G.kills++; META.totalKills++;
+          G.kills++; META.totalKills++; questProgress('kills',1);
           unlock('blood');
           if(META.totalKills>=50) unlock('exterm');
           /* combo: chain kills within 2.5 s, up to x5 */
           G.combo=Math.min(G.combo+1,5); G.comboT=200;
           G.bestCombo=Math.max(G.bestCombo,G.combo);
+          questProgress('combo',G.combo,'max');
           if(G.combo>=5) unlock('chain');
           const mult=G.combo, pts=50*mult;
           G.comboPts=(G.comboPts||0)+pts;
