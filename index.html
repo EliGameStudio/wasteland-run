@@ -166,7 +166,7 @@
       <button class="mbtn small" id="btnQuests">📋 DAILY</button>
       <button class="mbtn small" id="btnTrain">🧠 MATH</button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v6.6</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v6.7</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -1755,11 +1755,11 @@ const G={
   runCoins:0, safeDist:0, boss:null, nextBoss:1400, bossNum:0,
   combo:0, comboT:0, bestCombo:0, bossesRun:0,
   wxT:0, wxOn:false, wxI:0, night:false, finalBeaten:false, nightFade:0,
-  crates:[], picks:[], bolts:[], hazards:[], magnet:0, shield:0,
+  crates:[], picks:[], bolts:[], hazards:[], zips:[], magnet:0, shield:0,
   platforms:[], enemies:[], globs:[], coins:[], parts:[], pops:[], frame:0
 };
 const P={ sx:144, y:0, vy:0, w:39, h:66, ground:false, coyote:0,
-  atk:0, atkCd:0, jumpBuf:0, runT:0, slide:0, slideCd:0 };
+  atk:0, atkCd:0, jumpBuf:0, runT:0, slide:0, slideCd:0, zip:null, zipT:0, rideDx:0 };
 const H_STAND=66, H_SLIDE=36;
 try{ G.best=parseInt(localStorage.getItem('wr_best')||'0')||0; }catch(e){}
 
@@ -1825,9 +1825,19 @@ function makePlatCanvas(pl){
     }
   });
 }
-function addPlatform(x,w,y){
-  const pl={x,w,y,seed:rndi(1,99999)};
-  pl.cv=makePlatCanvas(pl); pl.oy=42; pl.ox=3;
+function addPlatform(x,w,y,opts){
+  const pl={x,w,y,y0:y,x0:x,seed:rndi(1,99999)};
+  if(opts && opts.move){                       // a lift: oscillates on one axis
+    pl.move=opts.move; pl.mph=Math.random()*6.28;
+    pl.amp=opts.amp; pl.msp=opts.msp;
+    pl.dx=0; pl.dy=0;
+    pl.lift=true;
+  }
+  /* a vertical lift renders its body from the lowest point so it always reaches down */
+  const renderY = (opts&&opts.move==='y') ? y+opts.amp : y;
+  const saveY=pl.y; pl.y=renderY;
+  pl.cv=makePlatCanvas(pl); pl.oy=42; pl.ox=3; pl.renderY=renderY;
+  pl.y=saveY;
   G.platforms.push(pl);
   if(w>300 && G.dist>450 && !G.boss){
     const p=Math.min(.7,.28+G.dist/16500);
@@ -1880,7 +1890,19 @@ function genPlatforms(){
         G.coins.push({x:gx+gap*.5, y:topY-9,ph:.8,hp:1});
         G.coins.push({x:gx+gap*.75,y:topY+12,ph:1.6,hp:1});
       }
-      addPlatform(gx+gap, rnd(255,630), ny);
+      /* from 1200 m: sometimes the next platform is a moving lift */
+      let opts=null;
+      if(G.dist/15>1200 && !G.boss && Math.random()<.22){
+        if(Math.random()<.5) opts={move:'y', amp:rnd(40,80), msp:rnd(.03,.05)};
+        else                 opts={move:'x', amp:rnd(50,90), msp:rnd(.025,.04)};
+      }
+      const nw=opts?rnd(200,300):rnd(255,630);
+      addPlatform(gx+gap, nw, ny, opts);
+      /* from 1500 m: occasionally string a zipline down to the next roof */
+      if(G.dist/15>1500 && !G.boss && !opts && Math.random()<.16){
+        const a=G.platforms[G.platforms.length-1];
+        G.zips.push({x1:a.x+a.w-20, y1:a.y-58, len:rnd(260,380), drop:rnd(70,150)});
+      }
     }
     last=G.platforms[G.platforms.length-1];
   }
@@ -1892,6 +1914,7 @@ function genPlatforms(){
   G.crates=G.crates.filter(c=>c.x>G.scroll-60 && c.hp>0);
   G.picks=G.picks.filter(k=>k.x>G.scroll-60 && k.hp>0);
   G.hazards=G.hazards.filter(h=>h.x>G.scroll-80);
+  G.zips=G.zips.filter(z=>z.x1+z.len>G.scroll-40);
 }
 
 /* ================= BOSSES: one per zone, distinct mechanics ================= */
@@ -2168,6 +2191,7 @@ function updateBoss(dt){
 /* ================= INPUT ================= */
 function doJump(){
   if(P.slide>0){ endSlide(); }        // cancel a slide into a jump
+  if(P.zip){ P.zip=null; P.vy=JUMP_V()*.8; P.ground=false; return; }  // hop off the wire
   P.jumpBuf=8;
 }
 function doSlide(){
@@ -2217,10 +2241,10 @@ function resetRun(){
     zone:0,zoneCount:0,banner:null,runCoins:0,safeDist:0,boss:null,nextBoss:1400,bossNum:0,
     combo:0,comboT:0,bestCombo:0,comboPts:0,bossesRun:0,
     wxT:0,wxOn:false,wxI:0,night:false,finalBeaten:false,nightFade:0,
-    crates:[],picks:[],bolts:[],hazards:[],magnet:0,shield:0,
-    platforms:[],enemies:[],globs:[],coins:[],parts:[],pops:[],crates:[],picks:[],bolts:[],hazards:[]});
+    crates:[],picks:[],bolts:[],hazards:[],zips:[],magnet:0,shield:0,
+    platforms:[],enemies:[],globs:[],coins:[],parts:[],pops:[],crates:[],picks:[],bolts:[],hazards:[],zips:[]});
   updateZone(); genPlatforms();
-  P.h=H_STAND; P.slide=0; P.slideCd=0;
+  P.h=H_STAND; P.slide=0; P.slideCd=0; P.zip=null; P.zipT=0;
   P.y=G.platforms[0].y-P.h; P.vy=0; P.atk=0; P.atkCd=0;
 }
 function startGame(){ initAudio(); resetRun(); setOverlay(null); G.state='play'; beep(520,.12,'square',.1,200); }
@@ -2228,7 +2252,7 @@ function respawn(){
   const wx=G.scroll+P.sx;
   let pl=G.platforms.find(p=>p.x+p.w>wx+180) || G.platforms[G.platforms.length-1];
   if(wx<pl.x+60) G.scroll=pl.x+60-P.sx;
-  P.h=H_STAND; P.slide=0; P.slideCd=0;
+  P.h=H_STAND; P.slide=0; P.slideCd=0; P.zip=null; P.zipT=0;
   P.y=pl.y-P.h-54; P.vy=0; G.invuln=130;
   G.enemies=G.enemies.filter(e=>e.x>G.scroll+W+90);
   G.globs.length=0;
@@ -2606,6 +2630,41 @@ function wxHazards(dt){
   }
 }
 
+/* ---- ziplines: press JUMP near the top anchor to ride down ---- */
+function updateZips(dt){
+  for(const z of G.zips){
+    z.x2=z.x1+z.len; z.y2=z.y1+z.drop;
+  }
+  G.zips=G.zips.filter(z=>z.x1+z.len>G.scroll-40);
+  if(P.zip){
+    const z=P.zip;
+    P.zipT+=0.014*dt;
+    if(P.zipT>=1){                        // arrive at the lower end, hop off
+      P.zip=null; P.vy=-6; P.ground=false;
+      return;
+    }
+    const zx1=z.x1-G.scroll, zx2=z.x2-G.scroll;
+    /* keep the player pinned to the wire, world scrolls normally */
+    const t=P.zipT;
+    const wireY=z.y1+(z.y2-z.y1)*t;
+    P.y=wireY-P.h+6; P.vy=0; P.ground=false;
+    if(Math.random()<.3) G.parts.push({x:P.sx+8,y:P.y+6,
+      vx:rnd(-1,1),vy:rnd(0,2),l:rnd(8,16),c:'#ffd75e'});
+    /* the world must still move so the wire slides past */
+    return;
+  }
+  /* grab: near the top anchor, airborne or jumping */
+  if(P.jumpBuf>0 && !P.ground){
+    for(const z of G.zips){
+      const zx1=z.x1-G.scroll;
+      if(Math.abs(zx1-P.sx)<50 && Math.abs((z.y1)-(P.y+20))<70){
+        P.zip=z; P.zipT=0; P.jumpBuf=0; SFX.jump(); beep(700,.1,'square',.06,180);
+        break;
+      }
+    }
+  }
+}
+
 /* ---- roof hazards: fans spin, valves puff, tiles crumble ---- */
 function updateHazards(dt){
   const px=P.sx, pfeet=P.y+P.h, phead=P.y;
@@ -2757,7 +2816,15 @@ function update(dt){
   if(m>=5000) unlock('legend');
   if(!G.boss && m>=G.nextBoss) spawnBoss();
   updateZone(); updateWeather(dt); wxHazards(dt);
-  genPlatforms(); updateBoss(dt); updateBolts(dt); updateHazards(dt);
+  /* advance moving lifts; remember their delta so a rider moves with them */
+  for(const pl of G.platforms){
+    if(!pl.move) continue;
+    pl.mph+=pl.msp*dt;
+    const off=Math.sin(pl.mph)*pl.amp;
+    if(pl.move==='y'){ const ny=pl.y0+off; pl.dy=ny-pl.y; pl.y=ny; pl.dx=0; }
+    else             { const nx=pl.x0+off; pl.dx=nx-pl.x; pl.x=nx; pl.dy=0; }
+  }
+  genPlatforms(); updateBoss(dt); updateBolts(dt); updateHazards(dt); updateZips(dt);
   if(G.banner){ G.banner.l-=dt; if(G.banner.l<=0) G.banner=null; }
   if(G.comboT>0){ G.comboT-=dt; if(G.comboT<=0) G.combo=0; }
 
@@ -2773,10 +2840,13 @@ function update(dt){
   if(P.jumpBuf>0 && P.coyote>0){
     P.vy=JUMP_V(); P.ground=false; P.coyote=0; P.jumpBuf=0; SFX.jump();
   }
+  if(P.zip){ P.runT+=G.speed*dt; }      // on a wire: skip normal gravity/landing
   const prevB=P.y+P.h;
-  P.vy=Math.min(P.vy+0.825*wxMods().grav*dt,22.5);
-  P.y+=P.vy*dt;
-  P.ground=false;
+  if(!P.zip){
+    P.vy=Math.min(P.vy+0.825*wxMods().grav*dt,22.5);
+    P.y+=P.vy*dt;
+    P.ground=false;
+  }
   const wx=G.scroll+P.sx;
   const wasAir=!P.ground;
   /* a fully collapsed tile under the player removes footing → you drop */
@@ -2787,17 +2857,22 @@ function update(dt){
       if(Math.abs(hx-P.sx)<26 && Math.abs((P.y+P.h)-h.y0)<14){ tileGap=true; break; }
     }
   }
-  if(P.vy>=0 && !tileGap) for(const pl of G.platforms){
+  P.rideDx=0;
+  if(P.vy>=0 && !tileGap && !P.zip) for(const pl of G.platforms){
     if(wx+P.w/2>pl.x && wx-P.w/2<pl.x+pl.w && prevB<=pl.y+9 && P.y+P.h>=pl.y){
       const impact=P.vy;
       P.y=pl.y-P.h; P.vy=0; P.ground=true;
-      if(wasAir && impact>9){                   // kick up dust on a real landing
+      /* ride horizontal lifts: shift the WORLD so the player tracks the platform */
+      if(pl.dx) P.rideDx=pl.dx;
+      if(wasAir && impact>9){
         for(let i=0;i<7;i++) G.parts.push({x:P.sx+rnd(-14,14),y:P.y+P.h,
           vx:rnd(-2.5,2.5),vy:rnd(-2.2,-.3),l:rnd(10,20),c:'rgba(210,198,178,.55)'});
       }
       break;
     }
   }
+  /* a horizontal lift nudges the player by scrolling the world under them */
+  if(P.rideDx) G.scroll-=P.rideDx;
   if(P.ground) P.runT+=G.speed*dt;
   if(P.y>H+75) loseHeart();
 
@@ -3129,8 +3204,30 @@ function render(){
   ctx.save();
   if(G.shake>0) ctx.translate(rnd(-G.shake,G.shake)*.6, rnd(-G.shake,G.shake)*.6);
 
-  for(const pl of G.platforms)
-    ctx.drawImage(pl.cv, Math.round(pl.x-G.scroll-pl.ox), Math.round(pl.y-pl.oy));
+  for(const pl of G.platforms){
+    const drawY = pl.renderY!==undefined ? pl.y - (pl.renderY-pl.y0) : pl.y;
+    ctx.drawImage(pl.cv, Math.round(pl.x-G.scroll-pl.ox), Math.round(drawY-pl.oy));
+    if(pl.lift){                          // warning stripes on a moving lift edge
+      ctx.fillStyle='#e8a23c';
+      for(let sx=6; sx<pl.w-6; sx+=24)
+        ctx.fillRect(Math.round(pl.x-G.scroll+sx), Math.round(pl.y-6), 12,4);
+      ctx.fillStyle='#1a1016';
+      for(let sx=18; sx<pl.w-6; sx+=24)
+        ctx.fillRect(Math.round(pl.x-G.scroll+sx), Math.round(pl.y-6), 12,4);
+    }
+  }
+
+  /* ---- ziplines ---- */
+  for(const z of G.zips){
+    const x1=z.x1-G.scroll, y1=z.y1, x2=z.x2-G.scroll, y2=z.y2;
+    ctx.strokeStyle='#2a2620'; ctx.lineWidth=3;
+    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+    ctx.strokeStyle='#6a5f52'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(x1,y1-1); ctx.lineTo(x2,y2-1); ctx.stroke();
+    /* anchor posts */
+    ctx.fillStyle='#4a4038'; ctx.fillRect(x1-4,y1-14,6,16); ctx.fillRect(x2-2,y2-14,6,16);
+    ctx.fillStyle='#e8a23c'; ctx.fillRect(x1-6,y1-16,10,4);   // grab flag
+  }
 
   const wA=(ZONES[zCur].water?zBlend:0)+(ZONES[zPrev].water?1-zBlend:0);
   const fA=(ZONES[zCur].fire ?zBlend:0)+(ZONES[zPrev].fire ?1-zBlend:0);
@@ -3236,7 +3333,8 @@ function render(){
   if(G.state!=='menu' && !(G.invuln>0 && Math.floor(G.frame/4)%2===0)){
     const sp=PSPR[META.skin][META.hero];
     let img, ox, oy;
-    if(P.slide>0){ img=sp.slide; ox=SOX; oy=SOY; }
+    if(P.zip){ img=sp.jump; ox=POX; oy=POY; }
+    else if(P.slide>0){ img=sp.slide; ox=SOX; oy=SOY; }
     else { img=P.atk>0?sp.atk:(!P.ground?sp.jump:sp.run[Math.floor(P.runT/13)%4]); ox=POX; oy=POY; }
     /* coloured rim light: draw the silhouette offset toward the light source */
     if(CZ.rim){
@@ -3247,6 +3345,9 @@ function render(){
       ctx.restore();
     }
     ctx.drawImage(img, Math.round(P.sx-P.w/2-ox), Math.round(P.y-oy));
+    if(P.zip){ ctx.strokeStyle='#c8bca8'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(P.sx,P.y-2); ctx.lineTo(P.sx+6,P.y-16); ctx.stroke();
+      ctx.fillStyle='#8a8f96'; ctx.fillRect(P.sx+3,P.y-20,8,5); }
   }
   if(G.shield>0 && G.state!=='menu'){        // shimmering bubble
     const r=40+Math.sin(G.frame*.18)*3;
