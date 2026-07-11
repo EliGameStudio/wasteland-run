@@ -113,6 +113,25 @@
   .qbar { height:8px; background:#3a2430; border-radius:4px; overflow:hidden; margin-top:5px; }
   .qbar i { display:block; height:100%; background:#7dd35f; }
   .qdone { color:#7dd35f; }
+  .mbtn.big { font-size:15px; padding:20px 30px; margin-top:18px;
+    box-shadow:0 6px 0 #1a1016, 0 0 24px rgba(232,162,60,.25); }
+  #menuStatus { position:absolute; top:calc(14px + env(safe-area-inset-top)); left:50%;
+    transform:translateX(-50%); display:flex; gap:16px; align-items:center;
+    font-family:inherit; font-size:9px; color:#b7a58f; background:rgba(26,16,22,.6);
+    border:3px solid #2a1f28; border-radius:20px; padding:8px 16px; cursor:pointer; }
+  #statusName { color:#f4e3c8; }
+  #statusCoins { color:#ffd75e; }
+  #menuDock { display:flex; gap:8px; margin-top:22px; }
+  .dock { position:relative; width:58px; height:62px; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; gap:5px; font-family:inherit;
+    background:rgba(26,18,24,.7); border:3px solid #2a1f28; border-radius:12px; cursor:pointer; }
+  .dock:active { transform:translateY(2px); }
+  .dock .di { font-size:20px; line-height:1; }
+  .dock .dl { font-size:7px; color:#b7a58f; }
+  .dock .badge { position:absolute; top:-6px; right:-6px; min-width:16px; height:16px;
+    background:#d43a2f; border:2px solid #1a1016; border-radius:9px; color:#fff;
+    font-size:8px; line-height:12px; padding:0 2px; display:none; }
+  .dock .badge.on { display:block; }
   #nameInput { width:80%; max-width:260px; margin-top:22px; padding:14px;
     font-family:inherit; font-size:14px; text-align:center; color:#ffd75e;
     background:#1a1016; border:4px solid #5a6338; border-radius:10px;
@@ -150,23 +169,22 @@
   <div id="toast"></div>
 
   <div class="overlay" id="menu">
+    <button id="btnName" style="display:none"></button>
+    <button id="menuStatus">
+      <span id="statusName">PLAYER: —</span>
+      <span id="statusCoins">⛁ 0</span>
+    </button>
     <div class="title">WASTELAND<br>RUN</div>
     <div class="sub">Year 2087. The cities have fallen.<br>Run the rooftops, slash the mutants,<br>don't look down.</div>
-    <div class="sub" style="color:#ffd75e" id="menuCoins"></div>
-    <button class="mbtn" id="btnStart">▶ START RUN</button>
-    <div class="row">
-      <button class="mbtn small" id="btnShop">🛒 SHOP</button>
-      <button class="mbtn small" id="btnTroph">🏆 TROPHIES</button>
+    <button class="mbtn big" id="btnStart">▶ START RUN</button>
+    <div id="menuDock">
+      <button class="dock" id="btnShop"><span class="di">🛒</span><span class="dl">Shop</span></button>
+      <button class="dock" id="btnQuests"><span class="di">📋</span><span class="dl">Daily</span><span class="badge" id="dailyBadge"></span></button>
+      <button class="dock" id="btnTrain"><span class="di">🧠</span><span class="dl">Math</span></button>
+      <button class="dock" id="btnRank"><span class="di">🏅</span><span class="dl">Ranks</span></button>
+      <button class="dock" id="btnTroph"><span class="di">🏆</span><span class="dl">Awards</span></button>
     </div>
-    <div class="row">
-      <button class="mbtn small" id="btnRank">🏅 RANKING</button>
-      <button class="mbtn small" id="btnName" style="font-size:8px">PLAYER: —</button>
-    </div>
-    <div class="row">
-      <button class="mbtn small" id="btnQuests">📋 DAILY</button>
-      <button class="mbtn small" id="btnTrain">🧠 MATH</button>
-    </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:12px">v6.7</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:14px">v7.2</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -1430,8 +1448,69 @@ function warlordFrame(hot){ return makeSpr(210,232,p=>{
   if(hot){ o(-60,-70,5,5,G2); o(50,-84,5,5,G2); o(-10,-124,4,4,G2); }
 });}
 
+/* BROODMOTHER — cave spider, 180x150 */
+function broodFrame(leg){ return makeSpr(180,162,p=>{
+  const o=(x,y,w,h,c)=>p(90+x,87+y,w,h,c);
+  const s=leg?3:-3;
+  /* 8 legs */
+  for(const side of [-1,1]){
+    for(let i=0;i<4;i++){
+      const ang=i, ox=side*(30+i*6), oy=-10+i*8+(i%2?s:-s);
+      o(ox, oy, side*22, 5, '#2a1c30');
+      o(ox+side*20, oy, side*6, 24+i*3, '#241828');
+      o(ox+side*20, oy+20+i*3, side*8, 5, '#1a1020');   // foot
+    }
+  }
+  /* abdomen */
+  o(-36,-8,72,54,'#3a2440'); o(-36,-8,72,7,'#4e3355');
+  o(-36,38,72,8,'#281830');
+  o(-10,4,20,30,'#5a2a48'); o(-6,10,12,18,'#7a3a60');    // marking
+  o(-24,-2,10,10,'#281830'); o(14,20,12,10,'#281830');
+  /* cephalothorax + fangs */
+  o(-24,-40,48,34,'#33203a'); o(-24,-40,48,6,'#4a3050');
+  /* eight eyes, glowing */
+  for(const [ex,ey] of [[-16,-30],[-6,-32],[6,-32],[16,-30],[-12,-22],[-2,-24],[8,-24],[14,-22]])
+    { o(ex,ey,5,5,'#c89dff'); o(ex+1,ey+1,2,2,'#ffffff'); }
+  /* fangs */
+  o(-12,-8,6,10,'#1a1020'); o(6,-8,6,10,'#1a1020');
+  o(-11,0,3,5,'#e8dcc8'); o(8,0,3,5,'#e8dcc8');
+  /* silk thread up to the ceiling */
+  o(-1,-84,2,44,'rgba(220,210,235,.5)');
+});}
+/* FORGEMASTER — machine boss, 170x180 */
+function forgeFrame(hot){ return makeSpr(216,190,p=>{
+  const o=(x,y,w,h,c)=>p(108+x,95+y,w,h,c);
+  const G1=hot?'#ffd24a':'#ff8a1e';
+  /* base treads */
+  o(-56,60,112,26,'#2e241c'); o(-56,60,112,5,'#4a3a2c');
+  for(let i=-52;i<52;i+=14) o(i,66,8,14,'#1a1108');
+  /* body: riveted iron block */
+  o(-48,-34,96,96,'#5a4632'); o(-48,-34,96,8,'#7a6244');
+  o(-48,54,96,8,'#3a2c1e'); o(-48,-34,8,96,'#3a2c1e');
+  for(let ry=-26;ry<54;ry+=18) for(let rx=-40;rx<44;rx+=18) o(rx,ry,4,4,'#2e2114');
+  /* furnace core */
+  o(-22,-10,44,40,'#1a0f08'); o(-16,-4,32,28,G1); o(-8,2,16,14,'#fff3b0');
+  /* piston arms (the melee attack) */
+  const pex=hot?18:0;
+  o(-72,-20,24,20,'#4a3a2c'); o(48,-20,24,20,'#4a3a2c');
+  o(-72-pex,-16,-16,12,'#6a5238'); o(48+pex,-16,16,12,'#6a5238');   // pistons out
+  o(-90-pex,-18,-8,16,'#2e2114'); o(64+pex,-18,8,16,'#2e2114');     // ram heads
+  /* smokestacks */
+  o(-38,-58,16,26,'#3a2c1e'); o(22,-58,16,26,'#3a2c1e');
+  o(-38,-58,16,4,'#5a4632'); o(22,-58,16,4,'#5a4632');
+  if(hot){ o(-34,-70,8,12,'rgba(120,110,100,.5)'); o(26,-70,8,12,'rgba(120,110,100,.5)'); }
+  /* head: single furnace eye */
+  o(-18,-52,36,22,'#5a4632'); o(-18,-52,36,5,'#7a6244');
+  o(-10,-46,20,12,G1); o(-4,-42,8,6,'#fff3b0');
+  /* gear on the chest */
+  o(-40,30,20,20,'#3a2c1e'); o(-36,34,12,12,G1);
+  o(20,34,18,18,'#3a2c1e'); o(24,38,10,10,G1);
+});}
+
 const BOSS_SPR={
   warlord:[warlordFrame(false),warlordFrame(true)],
+  broodmother:[broodFrame(false),broodFrame(true)],
+  forgemaster:[forgeFrame(false),forgeFrame(true)],
   ravager:[ravagerFrame(true),ravagerFrame(false)],
   matriarch:[matriarchFrame(true),matriarchFrame(false)],
   titan:[titanFrame(false),titanFrame(true)],       // [0]=arms down, [1]=raised
@@ -1617,6 +1696,14 @@ const ZONES=[
   fog:'40,55,80', part:{c:'rgba(240,248,255,.7)',vy:1.05,vx:.38},
   rim:'rgba(180,220,255,.35)', glow:'#aee8ff',
   roster:['crawler','ghoul','flyer','crawler']},
+ {name:'THE UNDERGROUND', boss:'broodmother', cave:true,
+  wx:{name:'ROCKFALL', tint:'rgba(90,70,110,.10)', kind:'ash'},
+  sky:['#1a1430','#2a2050','#3e3072','#524090'], sun:'#b49dff', sunY:.16,
+  far:'#2e2444', mid:'#1e1832', win:'rgba(180,150,255,.5)',
+  plat:'#453d5a', brick:'#372f48', top:'#6a5f85', hi:'#9080b0', dark:'#241d33',
+  fog:'40,30,60', part:{c:'rgba(190,160,255,.45)',vy:.5,vx:.15},
+  rim:'rgba(180,150,255,.4)', glow:'#b49dff',
+  roster:['crawler','spitter','ghoul','crawler']},
  {name:'SCORCHED SANDS', boss:'wyrm',
   wx:{name:'SANDSTORM', tint:'rgba(220,170,90,.18)', kind:'sand', speed:1.14},
   sky:['#2a1408','#6e2f10','#b85c1e','#d98a3a'], sun:'#ffd75e', sunY:.3,
@@ -1633,6 +1720,14 @@ const ZONES=[
   fog:'16,50,72', part:{c:'rgba(170,225,245,.45)',vy:-.6,vx:.2},
   rim:'rgba(120,210,235,.32)', glow:'#78d2eb',
   roster:['flyer','spitter','ghoul','flyer']},
+ {name:'THE FOUNDRY', boss:'forgemaster', foundry:true,
+  wx:{name:'CINDER BLAST', tint:'rgba(255,140,50,.10)', kind:'ember', hazard:'fire', rate:.012},
+  sky:['#150a06','#301408','#5a2810','#8a4418'], sun:'#ff8a2a', sunY:.20,
+  far:'#2a140a', mid:'#170a06', win:'rgba(255,150,50,.5)',
+  plat:'#4a3a30', brick:'#3a2c24', top:'#7a5236', hi:'#9a6a44', dark:'#1a0f0a',
+  fog:'50,25,12', part:{c:'rgba(255,160,60,.5)',vy:-.7,vx:.4},
+  rim:'rgba(255,150,60,.35)', glow:'#ff9a3c',
+  roster:['brute','crawler','spitter','brute']},
  {name:'INFERNO', boss:'colossus', fire:true,
   wx:{name:'EMBER FALL', tint:'rgba(255,120,40,.12)', kind:'ember',
       hazard:'fire', rate:.014},
@@ -1659,8 +1754,73 @@ function makeSkyline(w,h,base,winC,seed){
     }
   });
 }
-const FAR=ZONES.map((z,i)=>makeSkyline(1080,450,z.far,false,11+i*13));
-const MID=ZONES.map((z,i)=>makeSkyline(1080,510,z.mid,z.win,77+i*29));
+/* cavern backdrop: layered rock, stalactites from the top, glowing crystals */
+function makeCavern(w,h,base,accent,seed){
+  return makeSpr(w,h,(p,g)=>{
+    const R=sRnd(seed);
+    /* rolling rock floor silhouette */
+    let x=0;
+    while(x<1074){
+      const bw=40+R()*80, bh=h*(.2+R()*.4), top=h-bh;
+      p(x,top,bw,bh,base);
+      p(x,top,bw,4,'rgba(255,255,255,.05)');
+      for(let i=0;i<bw;i+=8) if(R()<.3) p(x+i,top+R()*bh,5,4,'rgba(0,0,0,.4)');
+      x+=bw*.8;
+    }
+    /* stalactites hanging from the ceiling */
+    x=0;
+    while(x<1074){
+      const sw=8+R()*16, sh=20+R()*60;
+      for(let k=0;k<sh;k+=4){ const kw=sw*(1-k/sh); p(x+(sw-kw)/2,k,Math.max(2,kw),4,base); }
+      p(x+sw/2-1,0,3,6,'rgba(0,0,0,.4)');
+      x+=30+R()*70;
+    }
+    /* glowing crystal clusters */
+    for(let i=0;i<w/90;i++){
+      const cx=R()*w, cy=h*.4+R()*h*.45;
+      for(let k=0;k<3;k++){ const kx=cx+k*6-6, kh=10+R()*18;
+        p(kx,cy-kh,4,kh,accent); p(kx,cy-kh,2,kh,'rgba(255,255,255,.4)'); }
+    }
+  });
+}
+/* foundry backdrop: blast furnaces, pipes, tanks, girders */
+function makeFoundry(w,h,base,glow,seed){
+  return makeSpr(w,h,(p,g)=>{
+    const R=sRnd(seed); let x=0;
+    while(x<1074){
+      const roll=R();
+      if(roll<.4){                       // blast furnace with molten glow
+        const fw=60+R()*40, fh=h*(.5+R()*.4), top=h-fh;
+        p(x,top,fw,fh,base);
+        p(x,top,fw,4,'rgba(255,255,255,.06)');
+        p(x+fw*.3,top+fh*.4,fw*.4,fh*.3,glow);          // glowing vent
+        p(x+fw*.3,top+fh*.4,fw*.4,4,'rgba(255,240,180,.6)');
+        p(x+8,top,4,fh,'rgba(0,0,0,.35)'); p(x+fw-12,top,4,fh,'rgba(0,0,0,.35)');
+        x+=fw+R()*20;
+      } else if(roll<.7){                // tank / cistern
+        const tw=40+R()*30, th=h*(.3+R()*.35), top=h-th;
+        p(x,top,tw,th,base); p(x,top,tw,4,'rgba(255,255,255,.05)');
+        p(x,top+th*.3,tw,3,'rgba(0,0,0,.4)'); p(x,top+th*.6,tw,3,'rgba(0,0,0,.4)');
+        p(x+tw*.4,top-8,tw*.2,8,base);                   // pipe stub
+        x+=tw+R()*30;
+      } else {                           // tangle of pipes
+        const ph=h*(.4+R()*.4), top=h-ph;
+        for(let k=0;k<4;k++){ const py=top+k*ph/4;
+          p(x,py,50+R()*40,6,base); p(x,py,50,2,'rgba(255,255,255,.05)'); }
+        x+=50+R()*40;
+      }
+    }
+    /* overhead girders */
+    for(let gx=0; gx<w; gx+=120) p(gx,10,110,6,base);
+  });
+}
+
+const FAR=ZONES.map((z,i)=> z.cave ? makeCavern(1080,450,z.far,z.glow,11+i*13)
+                          : z.foundry ? makeFoundry(1080,450,z.far,z.glow,11+i*13)
+                          : makeSkyline(1080,450,z.far,false,11+i*13));
+const MID=ZONES.map((z,i)=> z.cave ? makeCavern(1080,510,z.mid,z.glow,77+i*29)
+                          : z.foundry ? makeFoundry(1080,510,z.mid,z.glow,77+i*29)
+                          : makeSkyline(1080,510,z.mid,z.win,77+i*29));
 /* near foreground: jagged dark shapes that scroll faster than the world */
 function makeForeground(w,h,base,seed){
   return makeSpr(w,h,(p0,g)=>{
@@ -1732,7 +1892,7 @@ const ACH=[
  {id:'threads', name:'NEW THREADS',     desc:'Buy your first skin'},
  {id:'wind',    name:'SECOND WIND',     desc:'Continue with an ad reward'},
  {id:'chain',   name:'CHAIN REACTION',  desc:'Reach a x5 kill combo'},
- {id:'night',   name:'NIGHTFALL',       desc:'Defeat the Warlord at 9,000 m'}
+ {id:'night',   name:'NIGHTFALL',       desc:'Defeat the Warlord after all zones'}
 ];
 let toastT=null;
 function toast(txt){
@@ -2023,6 +2183,58 @@ const BOSS_DEF={
     }
   }},
 
+  /* BROODMOTHER: drops from the ceiling on silk, spits, hatches crawlers */
+  broodmother:{name:'THE BROODMOTHER', hp:7, half:[90,87], box:[100,80], tick:(b,dt)=>{
+    switch(b.state){
+      case 'enter': b.y-=0; b.x-=3.4*dt;
+        if(b.x<=285){ b.x=285; b.state='high'; b.t=0; b.baseY=H*.30; } break;
+      case 'high':                              // hangs high, spits venom
+        b.y=b.baseY+Math.sin(b.ph)*18;
+        if(tick(b,dt,80)){ shoot(b,-40,10,-3.4,rnd(-1,1),.03,'acid'); SFX.spit(); }
+        if(b.t>150){ b.state='drop'; b.t=0; SFX.screech(); }
+        break;
+      case 'drop':                              // descends to blade height to attack
+        b.y+=5.5*dt;
+        if(b.y>=H*.58){ b.y=H*.58; b.state='low'; b.t=0; }
+        break;
+      case 'low':                               // vulnerable window, hatches a crawler
+        b.y=H*.58+Math.sin(b.ph*2)*6;
+        if(tick(b,dt,90) && G.enemies.length<4){
+          const e=ETYPES.crawler(G.scroll+b.x-20, H*.7); G.enemies.push(e); SFX.snarl();
+        }
+        if(b.t>120){ b.state='climb'; b.t=0; }
+        break;
+      case 'climb':                             // retreats up the silk
+        b.y-=4.5*dt;
+        if(b.y<=b.baseY){ b.y=b.baseY; b.state='high'; b.t=0; }
+        break;
+    }
+  }},
+
+  /* FORGEMASTER: piston slams up close, hurls gears, vents fire */
+  forgemaster:{name:'THE FORGEMASTER', hp:8, half:[108,95], box:[96,120], tick:(b,dt)=>{
+    b.frame=(b.state==='slam')?1:0;
+    switch(b.state){
+      case 'enter': b.x-=3.2*dt; if(b.x<=280){b.x=280;b.state='idle';b.t=0;} break;
+      case 'idle':
+        b.y=b.baseY+Math.sin(b.ph)*4;
+        if(tick(b,dt,95)){                       // hurl a gear (arcs)
+          shoot(b,-50,-20,-4.4,-4.5,.28,'fire'); SFX.spit();
+        }
+        if(b.t>120){ b.state=(Math.random()<.5)?'slam':'vent'; b.t=0; SFX.roar(); }
+        break;
+      case 'slam':                               // pistons punch — telegraphed
+        b.y=b.baseY;
+        if(b.t>34){ b.state='idle'; b.t=0; G.shake=14; SFX.thud(); }
+        break;
+      case 'vent':                               // sprays fire low, jump it
+        b.y=b.baseY;
+        if(tick(b,dt,14)) shoot(b,-50,10,-5.2,0,0,'fire');
+        if(b.t>70){ b.state='idle'; b.t=0; }
+        break;
+    }
+  }},
+
   /* FINAL BOSS: three phases, each borrowing a past boss's trick */
   warlord:{name:'THE WARLORD', hp:20, half:[105,115], box:[104,116], tick:(b,dt)=>{
     const frac=b.hp/b.max;
@@ -2113,7 +2325,8 @@ function shoot(b,ox,oy,vx,vy,grav,col){
 function spawnBoss(){
   G.bossNum++;
   const m=G.dist/15;
-  const final = m>=9000 && !G.finalBeaten;
+  const LAP=ZONE_M*ZONES.length;               // one full lap of every zone
+  const final = m>=LAP && !G.finalBeaten;
   const type = final ? 'warlord' : ZONES[zCur].boss;
   const D=BOSS_DEF[type];
   const loop=Math.floor(G.dist/15/(ZONE_M*ZONES.length));   // +1 HP per full lap
@@ -2124,6 +2337,8 @@ function spawnBoss(){
   if(type==='matriarch') G.boss.baseY=G.boss.y=H*.42;   // jump to reach her
   if(type==='wyrm') G.boss.y=H+110;
   if(type==='warlord'){ G.boss.baseY=G.boss.y=H*.60; G.boss.phase=1; }   // within blade reach
+  if(type==='broodmother'){ G.boss.baseY=G.boss.y=H*.30; }
+  if(type==='forgemaster'){ G.boss.baseY=G.boss.y=H*.58; }
   G.banner={txt:'⚠ '+D.name+' ⚠', l:150};
   SFX.roar(); G.shake=18;
 }
@@ -2287,9 +2502,12 @@ const OVERLAYS=['menu','choice','adBox','shop','troph','rank','nameBox','quests'
 function setOverlay(id){
   for(const o of OVERLAYS) document.getElementById(o).classList.toggle('show',o===id);
   if(id==='menu'){
-    document.getElementById('menuCoins').textContent='⛁ '+META.coins+' coins';
+    document.getElementById('statusName').textContent='PLAYER: '+(PLAYER_NAME||'—');
+    document.getElementById('statusCoins').textContent='⛁ '+META.coins;
     const left=questsLeft();
-    document.getElementById('btnQuests').textContent=left?('📋 DAILY ('+left+')'):'📋 DAILY ✓';
+    const badge=document.getElementById('dailyBadge');
+    if(left){ badge.textContent=left; badge.classList.add('on'); }
+    else badge.classList.remove('on');
   }
 }
 
@@ -2349,7 +2567,8 @@ document.getElementById('btnToMenu').addEventListener('click',()=>{
 
 /* ---- name entry & ranking ---- */
 function updateMenuPlayer(){
-  document.getElementById('btnName').textContent='PLAYER: '+(PLAYER_NAME||'—');
+  const el=document.getElementById('statusName');
+  if(el) el.textContent='PLAYER: '+(PLAYER_NAME||'—');
 }
 function askName(){
   document.getElementById('nameInput').value=PLAYER_NAME;
@@ -2367,6 +2586,7 @@ document.getElementById('btnNameOk').addEventListener('click',confirmName);
 document.getElementById('nameInput').addEventListener('keydown',
   e=>{ if(e.key==='Enter') confirmName(); });
 document.getElementById('btnName').addEventListener('click',askName);
+document.getElementById('menuStatus').addEventListener('click',askName);
 bindTabs(); bindTrain(); bindShopTabs();
 document.getElementById('btnRank').addEventListener('click',
   ()=>{ setOverlay('rank'); renderRank(); });
@@ -2671,20 +2891,10 @@ function updateHazards(dt){
   for(const h of G.hazards){
     const hx=h.x-G.scroll;
     if(h.t==='fan'){
-      h.rot+=h.sp*dt;
-      /* blade sweep hurts unless you slide under (short) or are airborne above it */
-      if(G.invuln<=0 && Math.abs(hx-px)<26){
-        const bladeTop=h.y-28, bladeBot=h.y+4;
-        if(pfeet>bladeTop && phead<bladeBot) loseHeart();
-      }
+      h.rot+=h.sp*dt;                        // spins for atmosphere only, no damage
     } else if(h.t==='steam'){
       h.t2-=dt;
-      if(h.t2<=0){ h.on=!h.on; h.t2=h.on?46:90;
-        if(h.on && Math.abs(hx-px)<200) beep(320,.25,'sawtooth',.05,-120); }
-      if(h.on && G.invuln<=0 && Math.abs(hx-px)<20){
-        const top=h.y-120;                  // steam column rises above the valve
-        if(phead<h.y && pfeet>top) loseHeart();
-      }
+      if(h.t2<=0){ h.on=!h.on; h.t2=h.on?46:90; }   // puffs on a cycle, harmless
       if(h.on && Math.random()<.4)
         G.parts.push({x:h.x-G.scroll+rnd(-6,6),y:h.y-20-rnd(0,90),
           vx:rnd(-.6,.6),vy:rnd(-3,-1),l:rnd(12,22),c:'rgba(220,225,230,.5)'});
@@ -3135,7 +3345,7 @@ function drawNight(){
   const a=G.nightFade;
   if(a<=0) return;
   /* deep veil */
-  ctx.fillStyle='rgba(6,8,26,'+(0.62*a)+')';
+  ctx.fillStyle='rgba(14,16,40,'+(0.40*a)+')';
   ctx.fillRect(0,0,W,H);
   /* stars */
   ctx.globalAlpha=a;
@@ -3197,8 +3407,8 @@ function render(){
     ctx.globalAlpha=1;
   };
   drawL(FAR,.15,H*.34); drawL(MID,.4,H*.30);
-  const fog=ctx.createLinearGradient(0,H*.55,0,H);
-  fog.addColorStop(0,'rgba('+CZ.fog+',0)'); fog.addColorStop(1,'rgba('+CZ.fog+',.7)');
+  const fog=ctx.createLinearGradient(0,H*.66,0,H);
+  fog.addColorStop(0,'rgba('+CZ.fog+',0)'); fog.addColorStop(1,'rgba('+CZ.fog+',.42)');
   ctx.fillStyle=fog; ctx.fillRect(0,H*.5,W,H*.5);
 
   ctx.save();
@@ -3249,9 +3459,6 @@ function render(){
           ctx.fillStyle='rgba(230,235,240,'+(.35-i*.04)+')';
           ctx.fillRect(hx-w/2+Math.sin((G.frame*.2)+i)*3, yy, w, 14);
         }
-      } else if(h.t2<24){
-        /* hiss warning: valve glows just before it blows */
-        glowAt(hx, h.y-24, 30, '#e8e3d8', .3+Math.sin(G.frame*.4)*.15);
       }
     } else if(h.t==='tile'){
       ctx.drawImage(TILE[h.stage], hx-30, Math.round(h.y));
@@ -3283,10 +3490,16 @@ function render(){
     else if(e.t==='spitter') f=e.cd<25?1:0;
     else f=Math.floor(e.st)%2;
     const x=Math.round(e.x-G.scroll-e.w/2-off[0]), y=Math.round(e.y-off[1]);
-    if((e.t==='ghoul'||e.t==='crawler'||e.t==='brute') && e.dir>0){
+    const flip=(e.t==='ghoul'||e.t==='crawler'||e.t==='brute') && e.dir>0;
+    const edge=TINTED_SIL(spr[f],'rgba(0,0,0,0.7)');
+    if(flip){
       ctx.save(); ctx.translate(x+spr[f].width,y); ctx.scale(-1,1);
-      ctx.drawImage(spr[f],0,0); ctx.restore();
-    } else ctx.drawImage(spr[f],x,y);
+      ctx.drawImage(edge,-1,0); ctx.drawImage(edge,1,0);
+      ctx.drawImage(edge,0,1); ctx.drawImage(spr[f],0,0); ctx.restore();
+    } else {
+      ctx.drawImage(edge,x-1,y); ctx.drawImage(edge,x+1,y);
+      ctx.drawImage(edge,x,y+1); ctx.drawImage(spr[f],x,y);
+    }
   }
   for(const b of G.bolts){
     const bx=b.x-G.scroll;
@@ -3319,11 +3532,18 @@ function render(){
       const spr=frames[f];
       const bc = b.type==='colossus'||b.type==='warlord' ? '#ff8a1e'
                : b.type==='titan' ? '#7df0ff'
-               : b.type==='matriarch' ? '#7dff4f' : '#ffd75e';
-      glowAt(b.x, b.y-D.half[1]*.35, D.half[0]*1.3, bc, b.vuln?.30:.16);
+               : b.type==='matriarch'||b.type==='broodmother' ? '#7dff4f'
+               : b.type==='forgemaster' ? '#ff9a3c' : '#ffd75e';
+      /* readability halo so the boss never sinks into a dark background */
+      glowAt(b.x, b.y-D.half[1]*.25, D.half[0]*1.7, bc, b.vuln?.42:.24);
+      glowAt(b.x, b.y-D.half[1]*.25, D.half[0]*1.1, '#ffffff', .10);
       ctx.save();
       ctx.translate(Math.round(b.x), Math.round(b.y));
       if(b.state==='die') ctx.rotate(b.spin);
+      /* dark outline: draw the silhouette slightly offset in 4 directions */
+      const sil=TINTED_SIL(spr,'rgba(0,0,0,0.9)');
+      for(const [dx,dy] of [[-2,0],[2,0],[0,-2],[0,2]])
+        ctx.drawImage(sil,-D.half[0]+dx,-D.half[1]+dy);
       ctx.drawImage(spr,-D.half[0],-D.half[1]);
       ctx.restore();
     }
