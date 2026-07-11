@@ -175,18 +175,18 @@
       <button class="dock" id="btnRank"><span class="di">🏅</span><span class="dl">Ranks</span></button>
       <button class="dock" id="btnTroph"><span class="di">🏆</span><span class="dl">Awards</span></button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:14px">v7.4</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:14px">v7.5</div>
   </div>
 
   <div class="overlay" id="nameBox">
     <div class="title" style="font-size:18px">WHO ARE YOU,<br>RUNNER?</div>
-    <div class="sub">Enter your name — it will appear<br>on the family ranking</div>
+    <div class="sub">Enter your name — it will appear<br>on the global ranking</div>
     <input id="nameInput" maxlength="12" placeholder="NAME" autocomplete="off">
     <button class="mbtn" id="btnNameOk">✔ SAVE</button>
   </div>
 
   <div class="overlay" id="rank">
-    <div class="title" style="font-size:15px">FAMILY RANKING</div>
+    <div class="title" style="font-size:15px">LEADERBOARD</div>
     <div class="tabs" id="scopeTabs">
       <button class="tab on" data-scope="week">THIS WEEK</button>
       <button class="tab" data-scope="all">ALL TIME</button>
@@ -560,7 +560,7 @@ const BLADE_R  = () => 75+8*upgLvl('blade');
 const BLADE_DMG= () => upgLvl('blade')>=3?2:1;
 const ARMOR_P  = () => [0,.15,.30,.45][upgLvl('armor')];
 
-/* ---------- player profile & family leaderboard ---------- */
+/* ---------- player profile & global leaderboard ---------- */
 const LB_URL='https://wasteland-run-default-rtdb.europe-west1.firebasedatabase.app';
 let PLAYER_NAME='';
 try{ PLAYER_NAME=localStorage.getItem('wr_name')||''; }catch(e){}
@@ -635,7 +635,7 @@ let rankScope='week', rankMetric='score';
 
 /* ================= DAILY QUESTS =================
    Three quests, rerolled every calendar day. The day's date seeds the
-   picker, so every family member gets the SAME three quests. */
+   picker, so every player gets the SAME three quests that day. */
 const QUEST_POOL=[
  {id:'run800',  txt:'Run 800 m in one run',       goal:800,  reward:150, track:'runDist'},
  {id:'run2k',   txt:'Run 2,000 m in one run',     goal:2000, reward:300, track:'runDist'},
@@ -697,7 +697,7 @@ async function renderRank(){
     try{ await syncLB();
       hint.innerHTML=(rankScope==='week'
         ? 'Resets Monday · '+daysLeftInWeek()+' day(s) left'
-        : 'All-time family records')+'<br>Shared across the family';
+        : 'All-time records')+'<br>Synced online';
     }catch(e){ hint.textContent='Offline — showing this phone only'; }
   }
   const tbl=localLB(rankScope==='week'?LB_WK:LB_ALL);
