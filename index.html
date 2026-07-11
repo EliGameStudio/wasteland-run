@@ -32,11 +32,6 @@
   .btn.pressed { transform:translateY(4px); box-shadow:0 1px 0 #1a1016, inset 0 0 0 3px rgba(255,255,255,.08); }
   #btnJump { left:14px;  background:linear-gradient(#5a6338,#3c4526); }
   #btnAtk  { right:14px; background:linear-gradient(#a03427,#6e2118); }
-  #btnSlide { left:50%; transform:translateX(-50%); width:84px; height:64px;
-    bottom:calc(14px + env(safe-area-inset-bottom));
-    background:linear-gradient(#33506b,#22374a); font-size:8px; }
-  #btnSlide.pressed { transform:translateX(-50%) translateY(4px); }
-  #btnSlide svg { width:26px; height:26px; }
   .btn svg { width:34px; height:34px; }
 
   #btnSnd { position:absolute; top:52px; right:10px; z-index:6; font-family:inherit;
@@ -161,10 +156,6 @@
     <svg viewBox="0 0 16 16"><path fill="#f4e3c8" d="M12 1h3v3L7 12l1 1-2 2-1-1-1 1-2-2 1-1-1-1 2-2 1 1z"/></svg>
     ATTACK
   </div>
-  <div class="btn" id="btnSlide">
-    <svg viewBox="0 0 16 16"><path fill="#f4e3c8" d="M2 4h3v4h6v2H2zM11 3h3v3h-3z"/></svg>
-    SLIDE
-  </div>
   <button id="btnSnd">♪ SOUND: ON</button>
   <div id="toast"></div>
 
@@ -184,7 +175,7 @@
       <button class="dock" id="btnRank"><span class="di">🏅</span><span class="dl">Ranks</span></button>
       <button class="dock" id="btnTroph"><span class="di">🏆</span><span class="dl">Awards</span></button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:14px">v7.2</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:14px">v7.3</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -545,10 +536,11 @@ const UPGRADES=[
   steps:['off','small','medium','large']},
  {id:'blade',  name:'HONED BLADE',  desc:'Longer reach · lv3 hits twice as hard',
   steps:['+0','+8','+16','+16, x2 dmg']},
- {id:'slide',  name:'OILED BOOTS',  desc:'Faster slide recovery',
-  steps:['0.9 s','0.75 s','0.6 s','0.45 s']}
+ {id:'armor',  name:'SCRAP ARMOR',  desc:'A hit is sometimes shrugged off',
+  steps:['0%','15%','30%','45%']}
 ];
-if(!META.upg) META.upg={jump:0,magnet:0,blade:0,slide:0};
+if(!META.upg) META.upg={jump:0,magnet:0,blade:0,armor:0};
+if(typeof META.upg.armor!=='number') META.upg.armor=0; delete META.upg.slide;
 if(!META.hero) META.hero='runner';
 if(!META.heroes) META.heroes=['runner'];
 const HEROES=[
@@ -566,7 +558,7 @@ const JUMP_V   = () => -20.1*(1+[0,.05,.09,.12][upgLvl('jump')]);
 const MAG_R    = () => [0,70,120,170][upgLvl('magnet')];
 const BLADE_R  = () => 75+8*upgLvl('blade');
 const BLADE_DMG= () => upgLvl('blade')>=3?2:1;
-const SLIDE_CD = () => [52,44,36,28][upgLvl('slide')];
+const ARMOR_P  = () => [0,.15,.30,.45][upgLvl('armor')];
 
 /* ---------- player profile & family leaderboard ---------- */
 const LB_URL='https://wasteland-run-default-rtdb.europe-west1.firebasedatabase.app';
@@ -990,47 +982,6 @@ function drawPlayerBody(p,sk,pose){
     o(31,48,8,3,'#8a6a3a'); o(33,66,4,4,sk.blade);
   }
 }
-/* --- crouched slide pose: own canvas, hitbox 39x36 --- */
-const SOX=20, SOY=14;
-function drawPlayerSlide(p,sk){
-  const o=(x,y,w,h,c)=>p(SOX+x,SOY+y,w,h,c);
-  /* cape / scarf streaming behind */
-  if(sk.cape){
-    o(-4,6,12,12,sk.capeB); o(-14,8,12,11,sk.capeA);
-    o(-19,11,8,8,sk.capeC); o(-4,6,12,3,sk.capeB);
-  } else {
-    o(-4,10,12,5,sk.scarf); o(-14,12,10,4,sk.scarf2); o(-19,14,6,3,sk.scarf);
-  }
-  /* trailing dust puffs */
-  o(-8,30,6,4,'rgba(220,210,190,.5)'); o(-16,32,5,3,'rgba(220,210,190,.3)');
-  /* legs thrust forward */
-  o(16,20,15,11,sk.pants); o(16,20,15,3,sk.pantsSh);
-  o(29,22,13,9,sk.pants);  o(29,22,13,3,sk.pantsSh);
-  o(40,21,11,11,sk.boots); o(40,21,11,3,'#0f0d10');
-  o(42,24,4,3,sk.gogSh);
-  /* torso, low and leaning */
-  o(2,10,26,20,sk.jkt); o(2,10,26,4,sk.jktHi); o(2,26,26,4,sk.jktSh);
-  o(2,20,26,4,sk.belt); o(13,21,6,3,'#e8a23c');
-  if(sk.cape){ o(14,12,8,7,sk.belt); o(15,13,6,3,'#ffe08a'); }
-  if(sk.spots){ o(6,14,4,4,'#1a1216'); o(20,16,5,5,'#1a1216'); }
-  /* rear arm braced on the ground, blade skimming */
-  o(-2,20,8,7,sk.glove);
-  o(-6,28,16,4,sk.bladeSh); o(-6,28,16,2,sk.blade);
-  /* head low, visor forward */
-  o(4,-2,22,9,sk.hood); o(6,-3,18,3,sk.hoodHi);
-  o(2,3,26,10,sk.hood); o(2,11,26,3,sk.hoodSh);
-  if(sk.cape){ o(7,-8,4,7,sk.hood); o(21,-8,4,7,sk.hood); }
-  o(8,5,17,7,sk.skin);
-  if(sk.cape){
-    o(9,6,7,4,sk.rim); o(18,6,7,4,sk.rim);
-    o(10,7,5,2,sk.gog); o(19,7,5,2,sk.gog);
-  } else {
-    o(9,5,7,6,sk.rim); o(18,5,7,6,sk.rim);
-    o(10,6,5,4,sk.gog); o(19,6,5,4,sk.gog);
-    o(11,7,2,2,'#ffffff'); o(20,7,2,2,'#ffffff');
-  }
-  o(13,12,7,4,'#8a8f96');
-}
 const PSPR={};
 for(const sk of SKINS){
   PSPR[sk.id]={};
@@ -1040,7 +991,6 @@ for(const sk of SKINS){
           {legs:i, bob:(i===1||i===3)?1:0, atk:false, gun}))),
       jump: makeSpr(96,106,p=>drawPlayerBody(p,sk,{legs:'air',bob:0,atk:false,gun})),
       atk:  makeSpr(96,106,p=>drawPlayerBody(p,sk,{legs:'land',bob:0,atk:true,gun})),
-      slide: makeSpr(96,60,p=>drawPlayerSlide(p,sk)),
       icon: makeSpr(96,106,p=>drawPlayerBody(p,sk,{legs:1,bob:0,atk:false,gun}))
     };
   }
@@ -1919,8 +1869,8 @@ const G={
   platforms:[], enemies:[], globs:[], coins:[], parts:[], pops:[], frame:0
 };
 const P={ sx:144, y:0, vy:0, w:39, h:66, ground:false, coyote:0,
-  atk:0, atkCd:0, jumpBuf:0, runT:0, slide:0, slideCd:0, zip:null, zipT:0, rideDx:0 };
-const H_STAND=66, H_SLIDE=36;
+  atk:0, atkCd:0, jumpBuf:0, runT:0, zip:null, zipT:0, rideDx:0 };
+const H_STAND=66;
 try{ G.best=parseInt(localStorage.getItem('wr_best')||'0')||0; }catch(e){}
 
 /* ================= WORLD GEN ================= */
@@ -2025,7 +1975,7 @@ function addPlatform(x,w,y,opts){
   /* roof hazards, from 900 m onward, never overlapping the landing edges */
   if(w>300 && G.dist/15>900 && !G.boss && Math.random()<.42){
     const roll=Math.random(), hx=x+120+Math.random()*(w-240);
-    if(roll<.4){                    // spinning fan — jump or slide the blades
+    if(roll<.4){                    // spinning fan — decorative
       G.hazards.push({t:'fan', x:hx, y:y-30, rot:Math.random()*6, sp:.14+Math.random()*.08});
     } else if(roll<.72){            // steam valve — timed bursts
       G.hazards.push({t:'steam', x:hx, y, t2:Math.random()*120, on:false});
@@ -2104,7 +2054,7 @@ const BOSS_DEF={
   }},
 
   /* fires a 3-way acid spread and hatches flying minions */
-  matriarch:{name:'SPORE MATRIARCH', hp:6, half:[85,78], box:[96,74], tick:(b,dt)=>{
+  matriarch:{name:'SPORE MATRIARCH', hp:12, half:[85,78], box:[96,74], tick:(b,dt)=>{
     if(b.state==='enter'){ b.x-=3.9*dt;
       if(b.x<=280){ b.x=280; b.state='hover'; b.t=0; } return; }
     b.y=b.baseY+Math.sin(b.ph)*28;
@@ -2119,7 +2069,7 @@ const BOSS_DEF={
   }},
 
   /* armoured: only vulnerable right after a ground slam that rains icicles */
-  titan:{name:'FROST TITAN', hp:7, half:[75,90], box:[86,124], tick:(b,dt)=>{
+  titan:{name:'FROST TITAN', hp:14, half:[75,90], box:[86,124], tick:(b,dt)=>{
     b.y=b.baseY;
     switch(b.state){
       case 'enter': b.x-=3.2*dt; if(b.x<=275){b.x=275;b.state='idle';b.t=0;} break;
@@ -2136,7 +2086,7 @@ const BOSS_DEF={
   }},
 
   /* burrows, then erupts from below exactly where the player stands */
-  wyrm:{name:'SAND WYRM', hp:6, half:[65,95], box:[70,150], tick:(b,dt)=>{
+  wyrm:{name:'SAND WYRM', hp:12, half:[65,95], box:[70,150], tick:(b,dt)=>{
     switch(b.state){
       case 'enter': b.state='hidden'; b.t=0; b.y=H+110; break;
       case 'hidden':
@@ -2162,7 +2112,7 @@ const BOSS_DEF={
   }},
 
   /* leaps in great arcs out of the flood; hit it mid-air */
-  leviathan:{name:'LEVIATHAN', hp:6, half:[105,60], box:[150,66], tick:(b,dt)=>{
+  leviathan:{name:'LEVIATHAN', hp:12, half:[105,60], box:[150,66], tick:(b,dt)=>{
     switch(b.state){
       case 'enter': b.state='under'; b.t=0; break;
       case 'under':
@@ -2184,7 +2134,7 @@ const BOSS_DEF={
   }},
 
   /* BROODMOTHER: drops from the ceiling on silk, spits, hatches crawlers */
-  broodmother:{name:'THE BROODMOTHER', hp:7, half:[90,87], box:[100,80], tick:(b,dt)=>{
+  broodmother:{name:'THE BROODMOTHER', hp:14, half:[90,87], box:[100,80], tick:(b,dt)=>{
     switch(b.state){
       case 'enter': b.y-=0; b.x-=3.4*dt;
         if(b.x<=285){ b.x=285; b.state='high'; b.t=0; b.baseY=H*.30; } break;
@@ -2212,7 +2162,7 @@ const BOSS_DEF={
   }},
 
   /* FORGEMASTER: piston slams up close, hurls gears, vents fire */
-  forgemaster:{name:'THE FORGEMASTER', hp:8, half:[108,95], box:[96,120], tick:(b,dt)=>{
+  forgemaster:{name:'THE FORGEMASTER', hp:16, half:[108,95], box:[96,120], tick:(b,dt)=>{
     b.frame=(b.state==='slam')?1:0;
     switch(b.state){
       case 'enter': b.x-=3.2*dt; if(b.x<=280){b.x=280;b.state='idle';b.t=0;} break;
@@ -2236,7 +2186,7 @@ const BOSS_DEF={
   }},
 
   /* FINAL BOSS: three phases, each borrowing a past boss's trick */
-  warlord:{name:'THE WARLORD', hp:20, half:[105,115], box:[104,116], tick:(b,dt)=>{
+  warlord:{name:'THE WARLORD', hp:40, half:[105,115], box:[104,116], tick:(b,dt)=>{
     const frac=b.hp/b.max;
     const ph = frac>.66 ? 1 : frac>.33 ? 2 : 3;
     if(ph!==b.phase){                          // phase change: roar + shockwave
@@ -2292,7 +2242,7 @@ const BOSS_DEF={
   }},
 
   /* lobs fireballs, then charges across the arena (invulnerable) */
-  colossus:{name:'MAGMA COLOSSUS', hp:8, half:[80,80], box:[92,112], tick:(b,dt)=>{
+  colossus:{name:'MAGMA COLOSSUS', hp:16, half:[80,80], box:[92,112], tick:(b,dt)=>{
     b.frame=(b.state==='wind'||b.state==='charge')?1:0;
     switch(b.state){
       case 'enter': b.x-=3.4*dt; if(b.x<=285){b.x=285;b.state='idle';b.t=0;} break;
@@ -2405,27 +2355,14 @@ function updateBoss(dt){
 
 /* ================= INPUT ================= */
 function doJump(){
-  if(P.slide>0){ endSlide(); }        // cancel a slide into a jump
   if(P.zip){ P.zip=null; P.vy=JUMP_V()*.8; P.ground=false; return; }  // hop off the wire
   P.jumpBuf=8;
-}
-function doSlide(){
-  if(G.state!=='play' || P.slide>0 || P.slideCd>0 || !P.ground) return;
-  P.slide=32; P.slideCd=SLIDE_CD();
-  P.y+=H_STAND-H_SLIDE; P.h=H_SLIDE;
-  SFX.swing();
-  for(let i=0;i<6;i++) G.parts.push({x:P.sx-10,y:P.y+H_SLIDE,
-    vx:rnd(-4,-1),vy:rnd(-2,0),l:rnd(10,20),c:'rgba(220,210,190,.6)'});
-}
-function endSlide(){
-  if(P.h===H_STAND) return;              // guard on stance, not on the timer
-  P.slide=0; P.y-=H_STAND-H_SLIDE; P.h=H_STAND;
 }
 function doAtk(){
   if(P.atkCd>0 || G.state!=='play') return;
   if(isGun()){
     P.atk=11; P.atkCd=34;                       // slower cadence
-    G.bolts.push({x:G.scroll+P.sx+34, y:P.y+(P.slide>0?P.h*.5:26), vx:11, hp:1});
+    G.bolts.push({x:G.scroll+P.sx+34, y:P.y+26, vx:11, hp:1});
     beep(880,.07,'square',.09,-380);
     beep(240,.09,'sawtooth',.06,-90);
     G.shake=2;
@@ -2441,13 +2378,12 @@ function bindBtn(id,fn){
   el.addEventListener('pointercancel',release);
   el.addEventListener('pointerleave',release);
 }
-bindBtn('btnJump',doJump); bindBtn('btnAtk',doAtk); bindBtn('btnSlide',doSlide);
+bindBtn('btnJump',doJump); bindBtn('btnAtk',doAtk);
 window.addEventListener('keydown',e=>{
   if(e.target && e.target.id==='nameInput') return;
   initAudio();
   if(e.code==='Space'||e.code==='ArrowUp'){e.preventDefault(); doJump();}
   if(e.code==='KeyX'||e.code==='KeyZ') doAtk();
-  if(e.code==='ArrowDown'||e.code==='KeyS'||e.code==='KeyC'){e.preventDefault(); doSlide();}
 });
 
 /* ================= LIFECYCLE ================= */
@@ -2459,7 +2395,7 @@ function resetRun(){
     crates:[],picks:[],bolts:[],hazards:[],zips:[],magnet:0,shield:0,
     platforms:[],enemies:[],globs:[],coins:[],parts:[],pops:[],crates:[],picks:[],bolts:[],hazards:[],zips:[]});
   updateZone(); genPlatforms();
-  P.h=H_STAND; P.slide=0; P.slideCd=0; P.zip=null; P.zipT=0;
+  P.h=H_STAND; P.zip=null; P.zipT=0;
   P.y=G.platforms[0].y-P.h; P.vy=0; P.atk=0; P.atkCd=0;
 }
 function startGame(){ initAudio(); resetRun(); setOverlay(null); G.state='play'; beep(520,.12,'square',.1,200); }
@@ -2467,7 +2403,7 @@ function respawn(){
   const wx=G.scroll+P.sx;
   let pl=G.platforms.find(p=>p.x+p.w>wx+180) || G.platforms[G.platforms.length-1];
   if(wx<pl.x+60) G.scroll=pl.x+60-P.sx;
-  P.h=H_STAND; P.slide=0; P.slideCd=0; P.zip=null; P.zipT=0;
+  P.h=H_STAND; P.zip=null; P.zipT=0;
   P.y=pl.y-P.h-54; P.vy=0; G.invuln=130;
   G.enemies=G.enemies.filter(e=>e.x>G.scroll+W+90);
   G.globs.length=0;
@@ -2476,6 +2412,12 @@ function respawn(){
 }
 function loseHeart(){
   if(G.invuln>0) return;
+  if(ARMOR_P()>0 && Math.random()<ARMOR_P()){   // scrap armour shrugs it off
+    G.invuln=60; G.shake=6;
+    G.pops.push({x:P.sx,y:P.y-20,l:34,txt:'BLOCKED'});
+    beep(260,.1,'square',.1,-60);
+    return;
+  }
   if(G.shield>0){                       // energy shield eats one hit
     G.shield=0; G.invuln=80; G.shake=10;
     G.pops.push({x:P.sx,y:P.y-20,l:40,txt:'SHIELD!'});
@@ -2619,9 +2561,9 @@ const UPG_ICON={
   blade: makeSpr(24,24,p=>{ p(14,2,5,14,'#dfe6ee'); p(14,2,2,14,'#8a8f96');
     p(15,0,3,3,'#ffffff'); p(11,15,11,3,'#8a6a3a'); p(8,18,7,5,'#5a3a22');
     p(2,6,4,4,'#ffd75e'); }),
-  slide: makeSpr(24,24,p=>{ p(6,12,12,6,'#3c4046'); p(6,12,12,2,'#5a6068');
-    p(4,18,16,4,'#26292e'); p(0,10,5,3,'rgba(220,210,190,.7)');
-    p(0,15,4,2,'rgba(220,210,190,.5)'); p(16,6,4,4,'#ffd75e'); })
+  armor: makeSpr(24,24,p=>{ p(6,2,12,5,'#8a8f96'); p(4,6,16,10,'#6a727c');
+    p(4,6,16,3,'#a4acb4'); p(8,16,8,6,'#5a626c'); p(10,9,4,6,'#3a4048');
+    p(6,3,4,3,'#c4ccd4'); })
 };
 
 function renderShop(){
@@ -3041,10 +2983,7 @@ function update(dt){
   if(P.jumpBuf>0) P.jumpBuf-=dt;
   if(P.atkCd>0) P.atkCd-=dt;
   if(P.atk>0) P.atk-=dt;
-  if(P.slideCd>0) P.slideCd-=dt;
   if(G.magnet>0) G.magnet-=dt;
-  if(P.slide>0){ P.slide-=dt; if(P.slide<=0) endSlide(); }
-  if(!P.ground && P.slide>0) endSlide();      // no sliding in mid-air
   if(G.invuln>0) G.invuln-=dt;
   if(P.ground) P.coyote=7; else if(P.coyote>0) P.coyote-=dt;
   if(P.jumpBuf>0 && P.coyote>0){
@@ -3554,7 +3493,6 @@ function render(){
     const sp=PSPR[META.skin][META.hero];
     let img, ox, oy;
     if(P.zip){ img=sp.jump; ox=POX; oy=POY; }
-    else if(P.slide>0){ img=sp.slide; ox=SOX; oy=SOY; }
     else { img=P.atk>0?sp.atk:(!P.ground?sp.jump:sp.run[Math.floor(P.runT/13)%4]); ox=POX; oy=POY; }
     /* coloured rim light: draw the silhouette offset toward the light source */
     if(CZ.rim){
@@ -3609,11 +3547,6 @@ function render(){
     ctx.fillStyle=cc;       ctx.fillText('x'+G.combo, 18, 98);
     ctx.fillStyle='#3a2430'; ctx.fillRect(18,106,66,6);
     ctx.fillStyle=cc;        ctx.fillRect(18,106,Math.round(66*(G.comboT/200)),6);
-  }
-  /* slide cooldown pip */
-  if(P.slideCd>0){
-    ctx.fillStyle='#3a2430'; ctx.fillRect(W/2-24,H-18,48,5);
-    ctx.fillStyle='#4f8fb0'; ctx.fillRect(W/2-24,H-18,Math.round(48*(1-P.slideCd/SLIDE_CD())),5);
   }
   /* power-up timers, stacked under the combo meter */
   let py=126;
