@@ -175,7 +175,7 @@
       <button class="dock" id="btnRank"><span class="di">🏅</span><span class="dl">Ranks</span></button>
       <button class="dock" id="btnTroph"><span class="di">🏆</span><span class="dl">Awards</span></button>
     </div>
-    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:14px">v7.3</div>
+    <div class="sub" style="font-size:7px;color:#5d5248;margin-top:14px">v7.4</div>
   </div>
 
   <div class="overlay" id="nameBox">
@@ -808,7 +808,26 @@ const SKINS=[
   gog:'#9fe8ff',gogSh:'#4f9fc0',rim:'#0e1118',
   pants:'#242935',pantsSh:'#151921',boots:'#12151c',
   glove:'#1b1f28',skin:'#3a4152',blade:'#cfe4f2',bladeSh:'#65798c',
-  cape:true, capeA:'#1d222c', capeB:'#2b3242', capeC:'#131720'}
+  cape:true, capeA:'#1d222c', capeB:'#2b3242', capeC:'#131720'},
+ /* ---- drawn by the kids ---- */
+ {id:'kidred', name:'RED RIDER', cost:5000, prem:true, kid:true,
+  jkt:'#e23b3b',jktHi:'#ff6161',jktSh:'#a11f1f',
+  belt:'#8a1f1f',pack:'#c02626',packHi:'#e85050',
+  scarf:'#ffd23c',scarf2:'#d69a1e',
+  pants:'#b52626',pantsSh:'#7e1414',boots:'#5a1414',
+  glove:'#ffd23c',skin:'#f4c9a8',blade:'#ffe98a',bladeSh:'#c9a83c',
+  gog:'#ffd23c',gogSh:'#c9a020',rim:'#7e1414',
+  hair:'#5a2a1a',hairHi:'#7a3a24',hairSh:'#3a1a10',
+  eye:'#5a8a3a', blush:'#ff9a8a', bow:'#ffd23c', bowHi:'#fff0a8'},
+ {id:'eliana', name:'ELIANA', cost:5000, prem:true, kid:true,
+  jkt:'#8a3ce8',jktHi:'#a861ff',jktSh:'#5e1fa1',
+  belt:'#4a1f8a',pack:'#6a2cc0',packHi:'#9050e8',
+  scarf:'#ff8ad2',scarf2:'#d65aa0',
+  pants:'#6a26b5',pantsSh:'#44147e',boots:'#2e0f5a',
+  glove:'#ff8ad2',skin:'#f0c4a4',blade:'#e8c8ff',bladeSh:'#a883c9',
+  gog:'#ff8ad2',gogSh:'#c95a9a',rim:'#44147e',
+  hair:'#3a2050',hairHi:'#5a3078',hairSh:'#241033',
+  eye:'#7a4ad4', blush:'#ff9ad4', bow:'#ff8ad2', bowHi:'#ffd0ec'}
 ];
 const skinById=id=>SKINS.find(s=>s.id===id);
 
@@ -902,6 +921,34 @@ function drawPlayerBody(p,sk,pose){
     o(8,24,3,16,'#ffd23c'); o(28,24,3,16,'#ffd23c');
   }
 
+  /* ---- KID-DRAWN HERO: flowing hair, friendly face, no respirator ---- */
+  if(sk.kid){
+    /* hair crown + long strands down the sides (flutter with stride) */
+    const f=(legs===1||legs===3)?1:0;
+    o(3,-6,33,14,sk.hair); o(5,-7,27,4,sk.hairHi);      // top
+    o(1,4,6,26+f,sk.hair); o(1,4,3,26+f,sk.hairHi);      // left tress
+    o(33,4,6,26+f,sk.hair); o(36,4,3,26+f,sk.hairHi);    // right tress
+    o(2,3,35,10,sk.hair);                                 // sides framing face
+    o(2,3,3,10,sk.hairSh); o(34,3,3,10,sk.hair);
+    if(sk.bow){                                           // a little bow on top
+      o(14,-11,4,5,sk.bow); o(21,-11,4,5,sk.bow);
+      o(17,-10,5,4,sk.bowHi); o(18,-9,3,2,'#ffffff');
+    }
+    /* face */
+    o(8,7,23,15,sk.skin);
+    o(8,7,23,2,'#ffe6d0'); o(8,20,23,2,'#e0b89a');
+    /* big friendly eyes */
+    o(11,11,6,6,'#ffffff'); o(22,11,6,6,'#ffffff');
+    o(13,12,4,4,sk.eye);    o(24,12,4,4,sk.eye);
+    o(14,13,2,2,'#000000'); o(25,13,2,2,'#000000');
+    o(14,12,1,1,'#ffffff'); o(25,12,1,1,'#ffffff');       // sparkle
+    /* rosy cheeks + smile */
+    o(9,17,4,3,sk.blush); o(26,17,4,3,sk.blush);
+    o(15,19,9,2,'#a85a4a'); o(14,18,2,2,'#a85a4a'); o(24,18,2,2,'#a85a4a');
+    /* fringe over the forehead */
+    o(6,3,27,5,sk.hair); o(6,3,27,2,sk.hairHi);
+    o(12,7,3,3,sk.hair); o(24,7,3,3,sk.hair);            // little fringe points
+  } else {
   /* ---- head: hood, mask, goggles ---- */
   o(5,-4,29,10,sk.hood); o(7,-5,25,3,sk.hoodHi);
   o(2,3,35,16,sk.hood);
@@ -939,6 +986,7 @@ function drawPlayerBody(p,sk,pose){
   o(15,22,2,2,'#4a4f56'); o(22,22,2,2,'#4a4f56');
   o(17,23,5,3,'#5f656c');
   o(12,22,2,4,'#6f757c'); o(25,22,2,4,'#6f757c');   // hoses
+  }
 
   /* ---- arm, glove, weapon ---- */
   if(pose.gun){
